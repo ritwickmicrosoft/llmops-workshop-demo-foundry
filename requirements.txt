@@ -26,3 +26,6 @@ flask-cors>=4.0.0
 # Utilities
 python-dotenv>=1.0.0
 rich>=13.7.0
+
+# Document Processing
+PyPDF2>=3.0.0

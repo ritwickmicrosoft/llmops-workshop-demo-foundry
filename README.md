@@ -136,8 +136,18 @@ Open [`LLMOps_Workshop_Playbook.html`](https://htmlpreview.github.io/?https://gi
 
 ```
 llmops-workshop/
+├── data/                           # Sample documents (txt, md, pdf)
+│   ├── laptop-pro-15.txt           # Product specs
+│   ├── smartwatch-x200.txt         # Product specs
+│   ├── nc500-headphones.txt        # Product specs
+│   ├── tablet-s10.txt              # Product specs
+│   ├── return-policy.md            # Policy document
+│   ├── warranty-policy.md          # Policy document
+│   ├── shipping-policy.md          # Policy document
+│   ├── troubleshooting-guide.md    # Support document
+│   └── faq.pdf                     # PDF document
 ├── 01-rag-chatbot/                 # RAG Chatbot Module
-│   ├── create_search_index.py      # Creates vector index with 8 sample docs
+│   ├── create_search_index.py      # Reads data/ folder, vectorizes, indexes
 │   └── rag-flow/                   # Prompt Flow definition (optional)
 ├── 02-evaluation/                  # Evaluation Module
 │   ├── eval_dataset.jsonl          # Test dataset (Q&A pairs)
@@ -168,13 +178,19 @@ llmops-workshop/
 
 ## 📄 Sample Documents
 
-The workshop includes 8 Wall-E Electronics documents:
+The `data/` folder contains 9 Wall-E Electronics documents in multiple formats:
 
-| Category | Documents |
-|----------|-----------|
-| Products | Laptop Pro 15, SmartWatch X200, NC500 Headphones, Tablet S10 |
-| Policies | Return Policy, Warranty Policy, Shipping Policy |
-| Support | Troubleshooting Guide |
+| Format | Files | Description |
+|--------|-------|-------------|
+| `.txt` | 4 files | Product specifications (Laptop, Watch, Headphones, Tablet) |
+| `.md` | 4 files | Policies & support (Returns, Warranty, Shipping, Troubleshooting) |
+| `.pdf` | 1 file | FAQ document |
+
+The `create_search_index.py` script automatically:
+1. Reads all files from `data/` folder
+2. Extracts text from .txt, .md, and .pdf files
+3. Generates vector embeddings using Azure OpenAI
+4. Uploads to Azure AI Search with semantic and vector search
 
 ## 🔍 RAG Flow
 
