@@ -145,6 +145,19 @@
             font-size: 13px;
         }
         
+        .bubble h2, .bubble h3, .bubble h4 {
+            margin: 12px 0 8px 0;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .bubble h2 { font-size: 16px; }
+        .bubble h3 { font-size: 15px; }
+        .bubble h4 { font-size: 14px; color: #93c5fd; }
+        .bubble h2:first-child, .bubble h3:first-child, .bubble h4:first-child { margin-top: 0; }
+        
+        .bubble strong { font-weight: 600; color: #93c5fd; }
+        .bubble em { font-style: italic; }
+        
         .typing {
             display: flex;
             gap: 4px;
@@ -508,15 +521,35 @@ Key Information:
         }
         
         function formatMessage(text) {
-            // Basic markdown-like formatting
-            return text
+            // Enhanced markdown formatting
+            let html = text
+                // Headers (### -> h4, ## -> h3, # -> h2)
+                .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+                .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+                // Bold and italic
+                .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                // Inline code
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // Unordered lists (- item)
+                .replace(/^- (.+)$/gm, '<li>$1</li>')
+                // Ordered lists (1. item)
+                .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+                // Paragraphs (double newline)
                 .replace(/\n\n/g, '</p><p>')
-                .replace(/\n/g, '<br>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code>$1</code>')
-                .replace(/^(.*)$/gm, '<p>$1</p>')
-                .replace(/<p><\/p>/g, '');
+                // Single newlines
+                .replace(/\n/g, '<br>');
+            
+            // Wrap consecutive <li> elements in <ul>
+            html = html.replace(/(<li>.*?<\/li>)(<br>)?(<li>)/g, '$1$3');
+            html = html.replace(/(<li>.*?<\/li>)+/g, '<ul>$&</ul>');
+            
+            // Clean up extra breaks after headers
+            html = html.replace(/<\/h([234])><br>/g, '</h$1>');
+            
+            return '<p>' + html + '</p>';
         }
         
         function addTypingIndicator() {
