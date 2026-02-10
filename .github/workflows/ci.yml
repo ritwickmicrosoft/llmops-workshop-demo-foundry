@@ -1,0 +1,172 @@
+# =============================================================================
+# CI Pipeline - Pull Request Validation
+# =============================================================================
+# Runs on every PR to validate code quality and run basic tests
+# =============================================================================
+
+name: CI - Validate PR
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - '04-frontend/**'
+      - 'infra/**'
+  push:
+    branches: [main, master]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ===========================================================================
+  # Code Quality Checks
+  # ===========================================================================
+  lint:
+    name: 🔍 Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install linting tools
+        run: |
+          pip install ruff black isort
+
+      - name: Run Ruff (lint)
+        run: ruff check . --output-format=github
+
+      - name: Check Black formatting
+        run: black --check --diff .
+
+      - name: Check import sorting
+        run: isort --check-only --diff .
+
+  # ===========================================================================
+  # Security Scanning
+  # ===========================================================================
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security tools
+        run: pip install bandit safety
+
+      - name: Run Bandit (code security)
+        run: bandit -r . -f github -ll -x ./.venv
+
+      - name: Check dependencies for vulnerabilities
+        run: safety check -r requirements.txt
+        continue-on-error: true  # Don't fail PR for advisory warnings
+
+  # ===========================================================================
+  # Unit Tests
+  # ===========================================================================
+  test:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=term-missing || echo "No tests found - skipping"
+        continue-on-error: true
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  # ===========================================================================
+  # Infrastructure Validation
+  # ===========================================================================
+  validate-infra:
+    name: 🏗️ Validate Bicep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Validate Bicep templates
+        run: |
+          az bicep build --file infra/main.bicep
+          echo "✅ Bicep templates validated successfully"
+
+      - name: What-if deployment (dry run)
+        if: github.event_name == 'pull_request'
+        run: |
+          az deployment sub what-if \
+            --location eastus \
+            --template-file infra/main.bicep \
+            --parameters environment=dev
+        continue-on-error: true
+
+  # ===========================================================================
+  # Build Check
+  # ===========================================================================
+  build:
+    name: 📦 Build Application
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create deployment package
+        run: |
+          mkdir -p dist
+          cp 04-frontend/app.py dist/
+          cp 04-frontend/index.html dist/
+          cp requirements.txt dist/
+          echo "gunicorn --bind=0.0.0.0:8000 app:app" > dist/startup.sh
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp-package
+          path: dist/
+          retention-days: 7

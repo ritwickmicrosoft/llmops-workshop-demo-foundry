@@ -389,6 +389,68 @@ python 03-content-safety/test_content_safety.py
 
 Generates HTML report in `03-content-safety/test_results/`.
 
+## 🔄 CI/CD with GitHub Actions
+
+Production-ready pipelines for automated testing, evaluation, and deployment.
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **CI - Validate PR** | Pull requests | Lint, test, validate Bicep |
+| **CD - Deploy to Azure** | Push to main | Deploy infra + app |
+| **LLMOps - Evaluation** | Prompt/RAG changes | Quality gates |
+
+### Pipeline Architecture
+
+```mermaid
+flowchart LR
+    subgraph CI["🔍 CI Pipeline"]
+        LINT["Lint<br/>Ruff, Black"]
+        TEST["Unit Tests<br/>pytest"]
+        BICEP["Validate<br/>Bicep"]
+    end
+
+    subgraph EVAL["📊 Evaluation"]
+        QUALITY["Quality Metrics<br/>Groundedness ≥3.0<br/>Fluency ≥3.0"]
+        SAFETY["Content Safety<br/>Jailbreak Tests"]
+    end
+
+    subgraph CD["🚀 CD Pipeline"]
+        INFRA["Deploy Bicep<br/>Infrastructure"]
+        APP["Deploy App<br/>App Service"]
+        RBAC["Configure<br/>RBAC"]
+    end
+
+    PR["Pull Request"] --> CI
+    CI --> EVAL
+    EVAL -->|"Gates Pass"| MERGE["Merge to Main"]
+    MERGE --> CD
+```
+
+### Quick Setup
+
+1. **Create Service Principal:**
+   ```bash
+   az ad sp create-for-rbac \
+     --name "github-llmops-sp" \
+     --role contributor \
+     --scopes /subscriptions/{sub-id}/resourceGroups/rg-llmops-demo \
+     --sdk-auth
+   ```
+
+2. **Add GitHub Secrets:**
+   - `AZURE_CREDENTIALS` - JSON output from above
+   - `AZURE_SUBSCRIPTION_ID` - Your subscription ID
+   - `AZURE_PRINCIPAL_ID` - Service principal object ID
+   - `AZURE_OPENAI_ENDPOINT` - OpenAI endpoint URL
+
+3. **Run Workflows:**
+   - Open a PR → CI + Evaluation runs automatically
+   - Merge to main → CD deploys to Azure
+
+📖 See [.github/CICD_SETUP.md](.github/CICD_SETUP.md) for detailed setup instructions.
+
 ## 🧹 Cleanup
 
 Delete all resources when done:
