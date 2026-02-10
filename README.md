@@ -87,8 +87,10 @@ Build a complete RAG (Retrieval-Augmented Generation) chatbot for "Wall-E Electr
 | 3 | Create Vector Index | Embeddings, vector search, chunking | Azure OpenAI, AI Search | Intermediate |
 | 4 | Run RAG Chatbot | Retrieval, prompt engineering, context | Flask, GPT-4o, Vector Store | Intermediate |
 | 5 | Test & Explore | Query testing, response quality | Web UI, Azure Portal | Beginner |
+| 6 | Run Evaluation | Groundedness, fluency metrics | Azure AI Evaluation SDK | Intermediate |
+| 7 | Content Safety | Jailbreak testing, content filters | Azure OpenAI Content Filters | Intermediate |
 
-**Total Duration:** ~90 minutes
+**Total Duration:** ~120 minutes
 
 ### 🧠 Skills You'll Gain
 
@@ -97,6 +99,8 @@ Build a complete RAG (Retrieval-Augmented Generation) chatbot for "Wall-E Electr
 - ✅ Build a semantic search index with Azure AI Search
 - ✅ Implement RAG pattern with GPT-4o
 - ✅ Build a production-ready chat interface
+- ✅ Evaluate RAG quality with groundedness & fluency metrics
+- ✅ Test content safety and prompt injection protection
 
 ## 🔐 Authentication
 
