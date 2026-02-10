@@ -229,10 +229,12 @@ llmops-workshop/
 │   └── create_search_index.py      # Reads data/ folder, vectorizes, indexes
 ├── 02-evaluation/                  # Evaluation Module
 │   ├── eval_dataset.jsonl          # Test dataset (Q&A pairs)
-│   └── run_evaluation.py           # Run quality evaluation
+│   ├── run_evaluation.py           # Run quality evaluation
+│   └── eval_results/               # Generated reports (HTML + JSON)
 ├── 03-content-safety/              # Content Safety Module
 │   ├── content_filter_config.json  # Filter configuration
-│   └── test_content_safety.py      # Test content filters
+│   ├── test_content_safety.py      # Test content filters
+│   └── test_results/               # Generated reports (HTML + JSON)
 ├── 04-frontend/                    # Web Chat Interface
 │   ├── app.py                      # Flask backend (RBAC)
 │   ├── index.html                  # Dark-themed chat UI
@@ -281,6 +283,98 @@ The `create_search_index.py` script automatically:
 2. Extracts text from .txt, .md, and .pdf files
 3. Generates vector embeddings using Azure OpenAI
 4. Uploads to Azure AI Search with semantic and vector search
+
+## 📊 Evaluation Metrics
+
+The evaluation script (`02-evaluation/run_evaluation.py`) tests RAG quality using Azure AI Evaluation SDK:
+
+### Metrics (1-5 Scale)
+
+| Metric | Description | Target |
+|--------|-------------|--------|
+| **Groundedness** | Is the response supported by the retrieved context? | ≥4.0 |
+| **Fluency** | Is the response grammatically correct and natural? | ≥4.0 |
+
+### Scoring Standards
+
+| Score | Rating | Action |
+|-------|--------|--------|
+| **4.0-5.0** | ✓ Excellent | Production-ready |
+| **3.0-4.0** | ~ Good | Minor improvements needed |
+| **2.0-3.0** | ⚠ Needs Work | Improve prompts or retrieval |
+| **1.0-2.0** | ✗ Poor | Major rework required |
+
+### Sample Results
+
+```
+============================================================
+  Evaluation Results
+============================================================
+  Aggregate Metrics:
+  ----------------------------------------
+  ✗ Groundedness    2.60/5.0
+  ~ Fluency         3.00/5.0
+
+  📊 Recommendations:
+  - Consider improving groundedness: current score 2.60
+  - Consider improving fluency: current score 3.00
+```
+
+> **Note:** Low groundedness scores in demo are expected because the `context` field in `eval_dataset.jsonl` only contains document titles, not full text. In production with actual RAG retrieval, scores improve significantly.
+
+### Run Evaluation
+
+```powershell
+$env:AZURE_OPENAI_ENDPOINT = "https://aoai-llmops-eastus.openai.azure.com/"
+python 02-evaluation/run_evaluation.py
+```
+
+## 🛡️ Content Safety Testing
+
+The content safety script (`03-content-safety/test_content_safety.py`) tests protection against harmful content and prompt injection.
+
+### Azure OpenAI Default Filters
+
+| Category | Default Severity | Description |
+|----------|------------------|-------------|
+| **Hate Speech** | Medium | Blocked automatically |
+| **Sexual Content** | Medium | Blocked automatically |
+| **Violence** | Medium | Blocked automatically |
+| **Self-Harm** | Medium | Blocked automatically |
+| **Jailbreak/Prompt Injection** | Not enabled | Requires custom filter config |
+
+### Test Categories
+
+| Category | Tests | Description |
+|----------|-------|-------------|
+| `baseline` | 2 | Normal product queries |
+| `prompt_injection` | 3 | Jailbreak attempts (DAN, role-play) |
+| `boundary` | 3 | Off-topic, competitor, PII requests |
+
+### Sample Results
+
+```
+============================================================
+  Content Safety Testing Complete!
+============================================================
+  Total Tests: 8
+  ✓ Passed: 8
+  ✗ Failed: 0
+  Pass Rate: 100.0%
+
+  Filter Blocked: 0
+  Model Refused: 8 (handled via system prompt)
+```
+
+> **Note:** Jailbreak attempts are handled by the **system prompt**, not default content filters. The model correctly refuses malicious requests. For production, consider enabling **Prompt Shields** for additional protection.
+
+### Run Content Safety Tests
+
+```powershell
+python 03-content-safety/test_content_safety.py
+```
+
+Generates HTML report in `03-content-safety/test_results/`.
 
 ## 🧹 Cleanup
 

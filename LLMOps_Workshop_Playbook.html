@@ -679,6 +679,116 @@ What's the price of an iPhone?</pre>
     <p style="font-size:12px;color:var(--muted);">This is <strong>normal</strong> when running locally. The SDK tries Managed Identity first (for Azure VMs), then falls back to Azure CLI credentials. Your app will still work.</p>
   </section>
 
+  <!-- Evaluation Module -->
+  <section class="card">
+    <h2>📊 Step 6: Run Evaluation</h2>
+    <p style="font-size:13px;margin-bottom:15px;">Test RAG quality using Azure AI Evaluation SDK with Groundedness and Fluency metrics.</p>
+
+    <div class="step">
+      <span class="num">1</span>
+      <div>
+        <strong>Set environment variable</strong>
+        <pre>$env:AZURE_OPENAI_ENDPOINT = "https://aoai-llmops-eastus.openai.azure.com/"</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="num">2</span>
+      <div>
+        <strong>Run evaluation script</strong>
+        <pre>python 02-evaluation/run_evaluation.py</pre>
+        <p style="font-size:11px;color:var(--muted);margin-top:5px;">Generates JSON results + HTML report in <code>02-evaluation/eval_results/</code></p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="num">3</span>
+      <div>
+        <strong>Review metrics</strong>
+        <table style="font-size:11px;margin:10px 0;border-collapse:collapse;width:100%;">
+          <tr style="background:var(--surface);">
+            <th style="padding:8px;border:1px solid var(--border);">Metric</th>
+            <th style="padding:8px;border:1px solid var(--border);">Description</th>
+            <th style="padding:8px;border:1px solid var(--border);">Target</th>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid var(--border);"><strong>Groundedness</strong></td>
+            <td style="padding:8px;border:1px solid var(--border);">Is response supported by retrieved context?</td>
+            <td style="padding:8px;border:1px solid var(--border);">≥4.0/5.0</td>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid var(--border);"><strong>Fluency</strong></td>
+            <td style="padding:8px;border:1px solid var(--border);">Is response grammatically correct?</td>
+            <td style="padding:8px;border:1px solid var(--border);">≥4.0/5.0</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="note note-info">
+      <strong>Scoring Standards:</strong><br/>
+      • <span style="color:var(--ok);">4.0-5.0</span> = Excellent (production-ready)<br/>
+      • <span style="color:var(--warn);">3.0-4.0</span> = Good (minor improvements)<br/>
+      • <span style="color:#ef4444;">2.0-3.0</span> = Needs work (improve prompts/retrieval)<br/>
+      • <span style="color:#dc2626;">1.0-2.0</span> = Poor (major rework)
+    </div>
+  </section>
+
+  <!-- Content Safety Module -->
+  <section class="card">
+    <h2>🛡️ Step 7: Content Safety Testing</h2>
+    <p style="font-size:13px;margin-bottom:15px;">Test protection against harmful content and prompt injection attacks.</p>
+
+    <div class="step">
+      <span class="num">1</span>
+      <div>
+        <strong>Run content safety tests</strong>
+        <pre>python 03-content-safety/test_content_safety.py</pre>
+        <p style="font-size:11px;color:var(--muted);margin-top:5px;">Generates JSON results + HTML report in <code>03-content-safety/test_results/</code></p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="num">2</span>
+      <div>
+        <strong>Understand test categories</strong>
+        <table style="font-size:11px;margin:10px 0;border-collapse:collapse;width:100%;">
+          <tr style="background:var(--surface);">
+            <th style="padding:8px;border:1px solid var(--border);">Category</th>
+            <th style="padding:8px;border:1px solid var(--border);">Tests</th>
+            <th style="padding:8px;border:1px solid var(--border);">Expected Result</th>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid var(--border);"><strong>Baseline</strong></td>
+            <td style="padding:8px;border:1px solid var(--border);">Normal product queries</td>
+            <td style="padding:8px;border:1px solid var(--border);color:var(--ok);">✓ Allowed</td>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid var(--border);"><strong>Jailbreak</strong></td>
+            <td style="padding:8px;border:1px solid var(--border);">DAN, role-play, developer mode</td>
+            <td style="padding:8px;border:1px solid var(--border);color:var(--warn);">Model refuses</td>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid var(--border);"><strong>Boundary</strong></td>
+            <td style="padding:8px;border:1px solid var(--border);">Off-topic, competitor, PII</td>
+            <td style="padding:8px;border:1px solid var(--border);color:var(--warn);">Model refuses</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="note note-info">
+      <strong>Azure OpenAI Default Filters:</strong><br/>
+      • <strong>Blocked automatically:</strong> Hate, Sexual, Violence, Self-harm (medium severity)<br/>
+      • <strong>Not blocked by default:</strong> Jailbreak/Prompt injection (needs custom config)<br/>
+      • <strong>Primary defense:</strong> System prompts handle jailbreak attempts
+    </div>
+
+    <div class="note note-warn">
+      <strong>Production Tip:</strong> Enable <strong>Prompt Shields</strong> in Azure OpenAI for additional jailbreak protection.
+    </div>
+  </section>
+
   <!-- Cleanup -->
   <section class="card">
     <h2>🧹 Cleanup (After Workshop)</h2>
@@ -699,12 +809,59 @@ What's the price of an iPhone?</pre>
       <span class="pill">✅ Vector Embeddings</span>
       <span class="pill">✅ RAG Chatbot</span>
       <span class="pill">✅ RBAC Auth</span>
+      <span class="pill">✅ Evaluation</span>
+      <span class="pill">✅ Content Safety</span>
     </div>
+
+    <h3 style="font-size:14px;margin-bottom:8px;">📊 Your Results Summary</h3>
+    <p style="font-size:12px;text-align:left;max-width:600px;margin:0 auto 10px;">Run <code>python 02-evaluation/run_evaluation.py</code> to test RAG quality:</p>
+    <table style="font-size:11px;margin:0 auto 15px;border-collapse:collapse;">
+      <tr style="background:var(--surface);">
+        <th style="padding:6px 12px;border:1px solid var(--border);">Metric</th>
+        <th style="padding:6px 12px;border:1px solid var(--border);">Score</th>
+        <th style="padding:6px 12px;border:1px solid var(--border);">Standard</th>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Groundedness</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);color:var(--warn);">2.6/5.0</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">≥4.0 for production</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Fluency</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);color:var(--ok);">3.0/5.0</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">≥4.0 for production</td>
+      </tr>
+    </table>
+    <p style="font-size:11px;color:var(--muted);max-width:600px;margin:0 auto 15px;"><strong>Note:</strong> Low groundedness is expected in demo (context only has titles). Production RAG with full document retrieval scores higher.</p>
+
+    <h3 style="font-size:14px;margin-bottom:8px;">�️ Content Safety Testing</h3>
+    <p style="font-size:12px;text-align:left;max-width:600px;margin:0 auto 10px;">Run <code>python 03-content-safety/test_content_safety.py</code> to test protection:</p>
+    <table style="font-size:11px;margin:0 auto 15px;border-collapse:collapse;">
+      <tr style="background:var(--surface);">
+        <th style="padding:6px 12px;border:1px solid var(--border);">Category</th>
+        <th style="padding:6px 12px;border:1px solid var(--border);">Result</th>
+        <th style="padding:6px 12px;border:1px solid var(--border);">Protection</th>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Baseline (safe)</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);color:var(--ok);">✓ Pass</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Allowed</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Jailbreak attempts</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);color:var(--ok);">✓ Pass</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Model refused</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">PII requests</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);color:var(--ok);">✓ Pass</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Model refused</td>
+      </tr>
+    </table>
+    <p style="font-size:11px;color:var(--muted);max-width:600px;margin:0 auto 15px;"><strong>Key:</strong> Default filters block hate/sexual/violence/self-harm. Jailbreaks are handled by system prompt.</p>
 
     <h3 style="font-size:14px;margin-bottom:8px;">📚 Next Steps to Explore</h3>
     <ul style="text-align:left;font-size:12px;max-width:600px;margin:0 auto;">
-      <li><strong>Evaluation:</strong> Run <code>python 02-evaluation/run_evaluation.py</code> to test quality metrics</li>
-      <li><strong>Content Safety:</strong> Explore <code>03-content-safety/</code> for filter configuration</li>
       <li><strong>Add Your Data:</strong> Drop .txt, .md, or .pdf files into the <code>data/</code> folder and re-run indexer</li>
       <li><strong>Deploy to Production (Optional):</strong> Run <code>.\04-frontend\deploy-to-azure.ps1</code> to host on Azure App Service</li>
     </ul>
