@@ -1,32 +1,31 @@
-# LLMOps Workshop - Azure AI Foundry
+# LLMOps Workshop - Microsoft Foundry
 
-[![Azure AI Foundry](https://img.shields.io/badge/Azure%20AI-Foundry-blue)](https://ai.azure.com)
+[![Microsoft Foundry](https://img.shields.io/badge/Microsoft-Foundry-blue)](https://ai.azure.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-End-to-end LLMOps workshop using Azure AI Foundry to build a RAG-enabled chatbot with vector search and RBAC authentication.
+End-to-end LLMOps workshop using **Microsoft Foundry** to build a RAG-enabled chatbot with vector search and RBAC authentication. **No separate Azure OpenAI resource required** - all inference goes through Foundry's unified API.
 
-## �️ Architecture
+## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Client["🖥️ Client"]
+    subgraph Client["Client"]
         UI["Web Chat UI<br/>index.html"]
     end
 
-    subgraph Backend["⚙️ Flask Backend"]
+    subgraph Backend["Flask Backend"]
         APP["app.py<br/>RBAC Auth"]
     end
 
-    subgraph Azure["☁️ Azure Cloud"]
-        subgraph AIFoundry["Azure AI Foundry"]
-            FOUNDRY["foundry-llmops-demo<br/>(AIServices)"]
+    subgraph Azure["Azure Cloud"]
+        subgraph Foundry["Microsoft Foundry"]
             PROJECT["proj-llmops-demo"]
-        end
-        
-        subgraph OpenAI["Azure OpenAI"]
+            INFERENCE["Inference API"]
             GPT["gpt-4o<br/>Chat Completion"]
             EMB["text-embedding-3-large<br/>Embeddings"]
-            FILTER["Content Filters<br/>Hate/Sexual/Violence"]
+            SAFETY["Guardrails + Controls"]
+            EVAL["Evaluation"]
+            TRACE["Tracing"]
         end
         
         subgraph Search["Azure AI Search"]
@@ -35,22 +34,24 @@ flowchart TB
         end
     end
 
-    subgraph LLMOps["📊 LLMOps Modules"]
-        EVAL["02-evaluation/<br/>Groundedness, Fluency"]
-        SAFETY["03-content-safety/<br/>Jailbreak Testing"]
+    subgraph LLMOps["LLMOps Modules"]
+        EVALMOD["02-evaluation/<br/>Groundedness, Fluency"]
+        SAFETYMOD["03-content-safety/<br/>Jailbreak Testing"]
     end
 
-    subgraph DataFolder["📁 data/"]
+    subgraph DataFolder["data/"]
         TXT["*.txt<br/>Product Specs"]
         MD["*.md<br/>Policies"]
         PDF["*.pdf<br/>FAQs"]
     end
 
     UI -->|"1. User Question"| APP
-    APP -->|"2. Embed Query"| EMB
+    APP -->|"2. Embed Query"| INFERENCE
+    INFERENCE --> EMB
     EMB -->|"3. Vector"| INDEX
     INDEX -->|"4. Top 3 Docs"| APP
-    APP -->|"5. Context + Question"| GPT
+    APP -->|"5. Context + Question"| INFERENCE
+    INFERENCE --> GPT
     GPT -->|"6. Answer"| APP
     APP -->|"7. Response"| UI
     
@@ -58,76 +59,78 @@ flowchart TB
     MD --> INDEX
     PDF --> INDEX
     
-    FOUNDRY -.->|"Connection"| OpenAI
-    FOUNDRY -.->|"Connection"| Search
-    
-    EVAL -.->|"Quality Metrics"| GPT
-    SAFETY -.->|"Test Filters"| FILTER
+    PROJECT --> INFERENCE
+    EVALMOD -.->|"Quality Metrics"| EVAL
+    SAFETYMOD -.->|"Test Filters"| SAFETY
 ```
 
-## 🔄 RAG Flow Diagram
+## RAG Flow Diagram
 
 ```mermaid
 sequenceDiagram
-    participant U as 👤 User
-    participant F as 🌐 Flask App
-    participant E as 🧠 Embeddings
-    participant S as 🔍 AI Search
-    participant G as 💬 GPT-4o
+    participant U as User
+    participant F as Flask App
+    participant P as Foundry Project
+    participant E as Embeddings
+    participant S as AI Search
+    participant G as GPT-4o
 
     U->>F: "What's the return policy?"
-    F->>E: Generate embedding
+    F->>P: AIProjectClient
+    P->>E: Generate embedding
     E-->>F: [0.123, -0.456, ...]
     F->>S: Vector search (top 3)
     S-->>F: Return Policy, Warranty, FAQ
-    F->>G: System + Context + Question
+    F->>P: Chat completion
+    P->>G: System + Context + Question
     G-->>F: "Wall-E offers 30-day returns..."
     F-->>U: Formatted response
 ```
 
-## 🎯 What You'll Learn
+## What You'll Learn
 
 Build a complete RAG (Retrieval-Augmented Generation) chatbot for "Wall-E Electronics":
 
 | Module | Topic | Key Concepts | Azure Services | Difficulty |
 |--------|-------|--------------|----------------|------------|
 | 1 | Environment Setup | SDK auth, RBAC, workspace config | Azure CLI, DefaultAzureCredential | Beginner |
-| 2 | Deploy Azure Infrastructure | IaC, resource provisioning | AI Foundry, OpenAI, AI Search | Beginner |
-| 3 | Create Vector Index | Embeddings, vector search, chunking | Azure OpenAI, AI Search | Intermediate |
+| 2 | Deploy Azure Infrastructure | IaC, resource provisioning | Microsoft Foundry, AI Search | Beginner |
+| 3 | Create Vector Index | Embeddings, vector search, chunking | Foundry Inference, AI Search | Intermediate |
 | 4 | Run RAG Chatbot | Retrieval, prompt engineering, context | Flask, GPT-4o, Vector Store | Intermediate |
-| 5 | Test & Explore | Query testing, response quality | Web UI, Azure Portal | Beginner |
+| 5 | Test & Explore | Query testing, response quality | Web UI, Foundry Portal | Beginner |
 | 6 | Run Evaluation | Groundedness, fluency metrics | Azure AI Evaluation SDK | Intermediate |
-| 7 | Content Safety | Jailbreak testing, content filters | Azure OpenAI Content Filters | Intermediate |
+| 7 | Content Safety | Jailbreak testing, content filters | Foundry Guardrails + Controls | Intermediate |
 
 **Total Duration:** ~120 minutes
 
-### 🧠 Skills You'll Gain
+### Skills You'll Gain
 
-- ✅ Deploy Azure AI resources with RBAC (no API keys)
-- ✅ Create vector embeddings from documents (txt, md, pdf)
-- ✅ Build a semantic search index with Azure AI Search
-- ✅ Implement RAG pattern with GPT-4o
-- ✅ Build a production-ready chat interface
-- ✅ Evaluate RAG quality with groundedness & fluency metrics
-- ✅ Test content safety and prompt injection protection
+- Deploy Microsoft Foundry with models from Model Catalog
+- Use Foundry's unified inference API (no separate Azure OpenAI)
+- Create vector embeddings from documents (txt, md, pdf)
+- Build a semantic search index with Azure AI Search
+- Implement RAG pattern with GPT-4o via Foundry
+- Build a production-ready chat interface
+- Evaluate RAG quality with groundedness & fluency metrics
+- Use Foundry Guardrails for content safety
 
-## 🔐 Authentication
+## Authentication
 
 This workshop uses **RBAC (Role-Based Access Control)** — **no API keys required**.
 
 Your Azure CLI credentials are used automatically via `DefaultAzureCredential`:
-- `Cognitive Services OpenAI User` — Call Azure OpenAI APIs
+- `Cognitive Services OpenAI User` — Call Foundry inference APIs
 - `Search Index Data Contributor` — Read/write search indices
 - `Search Service Contributor` — Manage search service
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Azure subscription with Contributor access
 - [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) v2.50+
 - [Python 3.10+](https://www.python.org/downloads/)
 - [VS Code](https://code.visualstudio.com/) with Python extension
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Clone and Setup
 
@@ -145,59 +148,36 @@ pip install -r requirements.txt
 az login
 ```
 
-### 2. Deploy Azure Resources
+### 2. Deploy Microsoft Foundry (via Portal)
+
+1. Go to [Microsoft Foundry Portal](https://ai.azure.com)
+2. Create a new project (e.g., `proj-llmops-demo`)
+3. Deploy models from Model Catalog:
+   - `gpt-4o` for chat completions
+   - `text-embedding-3-large` for embeddings
+4. Note your Foundry endpoint: `https://<your-resource>.services.ai.azure.com`
+
+### 3. Deploy Azure AI Search
 
 ```powershell
 # Set variables
-$env:AZURE_RESOURCE_GROUP = "rg-llmops-demo"
-$env:AZURE_LOCATION = "eastus"
+$env:AZURE_RESOURCE_GROUP = "rg-llmops-canadaeast"
+$env:AZURE_LOCATION = "canadaeast"
 
 # Create resource group
 az group create --name $env:AZURE_RESOURCE_GROUP --location $env:AZURE_LOCATION
 
-# Create Azure OpenAI
-az cognitiveservices account create `
-  --name "aoai-llmops-demo" `
-  --resource-group $env:AZURE_RESOURCE_GROUP `
-  --location $env:AZURE_LOCATION `
-  --kind OpenAI `
-  --sku S0 `
-  --custom-domain "aoai-llmops-demo"
-
-# Deploy models
-az cognitiveservices account deployment create `
-  --name "aoai-llmops-demo" `
-  --resource-group $env:AZURE_RESOURCE_GROUP `
-  --deployment-name "gpt-4o" `
-  --model-name "gpt-4o" `
-  --model-version "2024-11-20" `
-  --model-format OpenAI `
-  --sku-capacity 10 `
-  --sku-name Standard
-
-az cognitiveservices account deployment create `
-  --name "aoai-llmops-demo" `
-  --resource-group $env:AZURE_RESOURCE_GROUP `
-  --deployment-name "text-embedding-3-large" `
-  --model-name "text-embedding-3-large" `
-  --model-version "1" `
-  --model-format OpenAI `
-  --sku-capacity 10 `
-  --sku-name Standard
-
 # Create Azure AI Search
 az search service create `
-  --name "search-llmops-demo" `
+  --name "search-llmops-canadaeast" `
   --resource-group $env:AZURE_RESOURCE_GROUP `
   --location $env:AZURE_LOCATION `
   --sku Basic
 
-# Assign RBAC roles (wait 2-3 min after for propagation)
+# Assign RBAC roles (replace with your Foundry resource)
 $myId = (az ad signed-in-user show --query id -o tsv)
-az role assignment create --assignee $myId --role "Cognitive Services OpenAI User" `
-  --scope $(az cognitiveservices account show --name aoai-llmops-demo --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)
 az role assignment create --assignee $myId --role "Search Index Data Contributor" `
-  --scope $(az search service show --name search-llmops-demo --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)
+  --scope $(az search service show --name search-llmops-canadaeast --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)
 ```
 
 ### 3. Create Vector Index
@@ -261,27 +241,27 @@ llmops-workshop/
 └── README.md                       # This file
 ```
 
-## 🛠️ Azure Resources
+## Azure Resources
 
 ```mermaid
 graph LR
-    subgraph RG["Resource Group: rg-llmops-demo"]
-        A["🤖 Azure AI Foundry<br/>foundry-llmops-demo"]
-        B["🧠 Azure OpenAI<br/>aoai-llmops-eastus"]
-        C["🔍 Azure AI Search<br/>search-llmops-dev-*"]
+    subgraph RG["Resource Group: rg-llmops-canadaeast"]
+        A["Microsoft Foundry<br/>foundry-llmops-canadaeast"]
+        B["Foundry Project<br/>proj-llmops-demo"]
+        C["Azure AI Search<br/>search-llmops-canadaeast"]
     end
     
-    A -->|"RBAC"| B
-    A -->|"RBAC"| C
+    A -->|"Contains"| B
+    B -->|"RBAC"| C
 ```
 
 | Resource | Name | Purpose |
 |----------|------|---------|
-| Azure AI Foundry | `foundry-llmops-demo` | Unified AI platform (AIServices) |
-| Azure OpenAI | `aoai-llmops-eastus` | LLM (gpt-4o) + embeddings |
-| Azure AI Search | `search-llmops-dev-*` | Vector store for RAG |
+| Microsoft Foundry | `foundry-llmops-canadaeast` | Unified AI platform with inference API |
+| Foundry Project | `proj-llmops-demo` | Models: gpt-4o, text-embedding-3-large |
+| Azure AI Search | `search-llmops-canadaeast` | Vector store for RAG |
 
-## 📄 Sample Documents
+## Sample Documents
 
 The `data/` folder contains 9 Wall-E Electronics documents in multiple formats:
 
@@ -294,7 +274,7 @@ The `data/` folder contains 9 Wall-E Electronics documents in multiple formats:
 The `create_search_index.py` script automatically:
 1. Reads all files from `data/` folder
 2. Extracts text from .txt, .md, and .pdf files
-3. Generates vector embeddings using Azure OpenAI
+3. Generates vector embeddings using Microsoft Foundry inference API
 4. Uploads to Azure AI Search with semantic and vector search
 
 ## 📊 Evaluation Metrics
@@ -338,23 +318,22 @@ The evaluation script (`02-evaluation/run_evaluation.py`) tests RAG quality usin
 ### Run Evaluation
 
 ```powershell
-$env:AZURE_OPENAI_ENDPOINT = "https://aoai-llmops-eastus.openai.azure.com/"
 python 02-evaluation/run_evaluation.py
 ```
 
-## 🛡️ Content Safety Testing
+## Content Safety Testing
 
-The content safety script (`03-content-safety/test_content_safety.py`) tests protection against harmful content and prompt injection.
+The content safety script (`03-content-safety/test_content_safety.py`) tests protection against harmful content and prompt injection using Microsoft Foundry.
 
-### Azure OpenAI Default Filters
+### Foundry Content Safety (via Guardrails + Controls)
 
-| Category | Default Severity | Description |
+| Category | Default Behavior | Description |
 |----------|------------------|-------------|
-| **Hate Speech** | Medium | Blocked automatically |
-| **Sexual Content** | Medium | Blocked automatically |
-| **Violence** | Medium | Blocked automatically |
-| **Self-Harm** | Medium | Blocked automatically |
-| **Jailbreak/Prompt Injection** | Not enabled | Requires custom filter config |
+| **Hate Speech** | Filtered | Blocked automatically |
+| **Sexual Content** | Filtered | Blocked automatically |
+| **Violence** | Filtered | Blocked automatically |
+| **Self-Harm** | Filtered | Blocked automatically |
+| **Jailbreak/Prompt Injection** | Configurable | Enable via Guardrails + Controls |
 
 ### Test Categories
 
@@ -371,15 +350,15 @@ The content safety script (`03-content-safety/test_content_safety.py`) tests pro
   Content Safety Testing Complete!
 ============================================================
   Total Tests: 8
-  ✓ Passed: 8
-  ✗ Failed: 0
+  Passed: 8
+  Failed: 0
   Pass Rate: 100.0%
 
   Filter Blocked: 0
   Model Refused: 8 (handled via system prompt)
 ```
 
-> **Note:** Jailbreak attempts are handled by the **system prompt**, not default content filters. The model correctly refuses malicious requests. For production, consider enabling **Prompt Shields** for additional protection.
+> **Note:** Jailbreak attempts are handled by the **system prompt**, not default content filters. The model correctly refuses malicious requests. For production, configure **Guardrails + Controls** in Foundry portal.
 
 ### Run Content Safety Tests
 
@@ -389,7 +368,7 @@ python 03-content-safety/test_content_safety.py
 
 Generates HTML report in `03-content-safety/test_results/`.
 
-## 🧹 Cleanup
+## Cleanup
 
 Delete all resources when done:
 
@@ -397,16 +376,16 @@ Delete all resources when done:
 az group delete --name rg-llmops-demo --yes --no-wait
 ```
 
-## 📚 Resources
+## Resources
 
-- [Azure AI Foundry Documentation](https://learn.microsoft.com/azure/ai-studio/)
-- [Azure OpenAI Service](https://learn.microsoft.com/azure/ai-services/openai/)
+- [Microsoft Foundry Documentation](https://learn.microsoft.com/azure/ai-studio/)
+- [Azure AI Inference SDK](https://learn.microsoft.com/azure/ai-studio/how-to/develop/sdk-overview)
 - [Azure AI Search Vector Search](https://learn.microsoft.com/azure/search/vector-search-overview)
 
-## 📄 License
+## License
 
 MIT License
 
 ---
 
-**LLMOps Workshop — February 2026**
+**LLMOps Workshop — Microsoft Foundry — February 2026**

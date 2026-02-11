@@ -8,6 +8,10 @@ gunicorn>=21.0.0
 # Azure Authentication (RBAC)
 azure-identity>=1.15.0
 
+# Tracing & Observability (for Foundry Portal)
+azure-monitor-opentelemetry>=1.6.0
+opentelemetry-instrumentation-flask>=0.46b0
+
 # Azure AI Services
 azure-search-documents>=11.4.0
 openai>=1.12.0

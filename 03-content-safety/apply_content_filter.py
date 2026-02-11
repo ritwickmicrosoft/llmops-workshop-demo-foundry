@@ -1,26 +1,29 @@
 """
 LLMOps Workshop - Apply Content Safety Filter
 ==============================================
-Applies custom content filter configuration to Azure OpenAI deployment.
+Applies custom content filter configuration via Microsoft Foundry.
 
-This script demonstrates how to programmatically configure content safety.
-In production, you would typically use the Azure Portal or ARM/Bicep templates.
+This script demonstrates how to view and configure content safety settings.
+Content filters are managed through Microsoft Foundry Portal or Azure Content Safety API.
 
 Authentication: DefaultAzureCredential (RBAC)
+Microsoft Foundry: Uses Guardrails + controls in the portal
 """
 
 import os
 import json
 from pathlib import Path
 from azure.identity import DefaultAzureCredential
-from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 
 
-# Configuration
-AZURE_SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID")
-AZURE_RESOURCE_GROUP = os.environ.get("AZURE_RESOURCE_GROUP", "rg-llmops-demo")
-AZURE_OPENAI_ACCOUNT = os.environ.get("AZURE_OPENAI_ACCOUNT", "aoai-llmops-dev")
-DEPLOYMENT_NAME = "gpt-4o"
+# Configuration - Microsoft Foundry
+# Use the project endpoint from Foundry portal: Overview > Endpoints and keys
+FOUNDRY_PROJECT_ENDPOINT = os.environ.get(
+    "FOUNDRY_PROJECT_ENDPOINT", 
+    "https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo"
+)
+FOUNDRY_PROJECT_NAME = os.environ.get("FOUNDRY_PROJECT_NAME", "proj-llmops-demo")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "gpt-4o")
 
 CONFIG_PATH = Path(__file__).parent / "content_filter_config.json"
 
@@ -33,33 +36,21 @@ def load_filter_config(config_path: Path) -> dict:
 
 def main():
     print("=" * 60)
-    print("  LLMOps Workshop - Apply Content Safety Filter")
+    print("  Microsoft Foundry - Content Safety Configuration")
     print("=" * 60)
     
-    # Validate environment
-    if not AZURE_SUBSCRIPTION_ID:
-        print("\n❌ AZURE_SUBSCRIPTION_ID environment variable not set.")
-        print("   Run: $env:AZURE_SUBSCRIPTION_ID = '<your-subscription-id>'")
-        return
-    
     # Initialize credentials
-    print("\n[1/4] Authenticating with Azure...")
+    print("\n[1/3] Authenticating with Azure...")
     credential = DefaultAzureCredential()
-    print("  ✓ Using DefaultAzureCredential (RBAC)")
-    
-    # Initialize management client
-    print("\n[2/4] Initializing Cognitive Services client...")
-    client = CognitiveServicesManagementClient(
-        credential=credential,
-        subscription_id=AZURE_SUBSCRIPTION_ID
-    )
-    print(f"  ✓ Subscription: {AZURE_SUBSCRIPTION_ID}")
+    print("  Using DefaultAzureCredential (RBAC)")
+    print(f"  Foundry Project: {FOUNDRY_PROJECT_NAME}")
+    print(f"  Foundry Endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
     
     # Load filter configuration
-    print("\n[3/4] Loading content filter configuration...")
+    print("\n[2/3] Loading content filter configuration...")
     filter_config = load_filter_config(CONFIG_PATH)
-    print(f"  ✓ Filter name: {filter_config['name']}")
-    print(f"  ✓ Base policy: {filter_config['basePolicyName']}")
+    print(f"  Filter name: {filter_config['name']}")
+    print(f"  Base policy: {filter_config['basePolicyName']}")
     
     # Display filter settings
     print("\n  Input Filters:")
@@ -74,45 +65,37 @@ def main():
             threshold = value.get('severityThreshold', 'Enabled')
             print(f"    - {key}: {threshold}")
     
-    # Get current deployment
-    print(f"\n[4/4] Applying filter to deployment '{DEPLOYMENT_NAME}'...")
-    
-    try:
-        deployment = client.deployments.get(
-            resource_group_name=AZURE_RESOURCE_GROUP,
-            account_name=AZURE_OPENAI_ACCOUNT,
-            deployment_name=DEPLOYMENT_NAME
-        )
-        print(f"  ✓ Found deployment: {deployment.name}")
-        print(f"  ✓ Model: {deployment.properties.model.name}")
-        
-        # Note: Programmatic content filter application requires specific API
-        # For workshop purposes, we guide users to apply via Portal
-        print("\n" + "=" * 60)
-        print("  ⚠️  Content Filter Application")
-        print("=" * 60)
-        print("""
-  To apply the content filter configuration:
+    # Guide for applying in Microsoft Foundry
+    print("\n[3/3] Content Filter Application Guide")
+    print("\n" + "=" * 60)
+    print("  Microsoft Foundry Content Safety")
+    print("=" * 60)
+    print(f"""
+  To apply content safety in Microsoft Foundry:
   
-  1. Open Azure AI Foundry Portal: https://ai.azure.com
-  2. Navigate to your project → Safety + security → Content filters
-  3. Click 'Create content filter'
-  4. Configure settings as shown above
-  5. Apply to your gpt-4o deployment
+  1. Open Microsoft Foundry Portal: https://ai.azure.com
   
-  Alternatively, use the Azure Portal:
-  1. Go to your Azure OpenAI resource
-  2. Click 'Content filters' under Resource Management
-  3. Create a new content filter with the settings above
-  4. Assign it to your deployment
+  2. Navigate to your project: {FOUNDRY_PROJECT_NAME}
+  
+  3. Go to 'Guardrails + controls' under 'Protect and govern'
+  
+  4. Configure Content Filters:
+     - Click 'Content filters'
+     - Create a new filter with the settings shown above
+     - Apply to your model deployment: {CHAT_MODEL}
+  
+  5. Enable Risks + alerts for monitoring
+  
+  Alternative: Use Azure AI Content Safety API
+  - Install: pip install azure-ai-contentsafety
+  - Use ContentSafetyClient for real-time content analysis
+  
+  For programmatic filtering during inference:
+  - Use the analyze_text() method before sending to model
+  - Block or modify content based on severity thresholds
 """)
-        
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        print("   Make sure the deployment exists and you have proper permissions.")
-        return
     
-    print("\n  ✓ Content filter configuration ready for application!")
+    print("  Content filter configuration ready for application!")
     print("\n" + "=" * 60)
 
 

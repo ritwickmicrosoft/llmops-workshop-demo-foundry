@@ -4,8 +4,7 @@ LLMOps Workshop - Evaluation Script
 Runs evaluation metrics on the RAG chatbot using Azure AI Foundry Evaluation SDK.
 Uses built-in evaluators: Groundedness, Relevance, Coherence, Fluency.
 
-Authentication: DefaultAzureCredential (RBAC - no API keys)
-"""
+Authentication: DefaultAzureCredential (RBAC - no API keys)Microsoft Foundry: Uses AIProjectClient for chat completions and evaluation"""
 
 import os
 import json
@@ -21,11 +20,16 @@ from azure.ai.projects import AIProjectClient
 
 
 # Configuration
-AZURE_SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID", "1d53bfb3-a84c-4eb4-8c79-f29dc8424b6a")
-AZURE_RESOURCE_GROUP = os.environ.get("AZURE_RESOURCE_GROUP", "rg-llmops-demo")
+# Microsoft Foundry Project Configuration
+# Use the project endpoint from Foundry portal: Overview > Endpoints and keys
+FOUNDRY_PROJECT_ENDPOINT = os.environ.get(
+    "FOUNDRY_PROJECT_ENDPOINT", 
+    "https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo"
+)
 AZURE_PROJECT_NAME = os.environ.get("AZURE_PROJECT_NAME", "proj-llmops-demo")
-AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
-AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+
+# Model deployed in Foundry (from Model Catalog)
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "gpt-4o")
 
 # Limit samples for demo (reduce rate limit issues)
 MAX_SAMPLES = int(os.environ.get("EVAL_MAX_SAMPLES", "5"))
@@ -44,29 +48,14 @@ def load_evaluation_data(file_path: Path) -> list[dict]:
     return data
 
 
-def run_rag_flow(question: str, project_client: AIProjectClient) -> dict:
+def run_rag_flow(question: str, openai_client) -> dict:
     """
     Run the RAG flow and return the response.
-    In a real scenario, this would call the deployed Prompt Flow endpoint.
+    Uses Microsoft Foundry via OpenAI client for chat completions.
     """
-    # This is a placeholder - in production, call your deployed endpoint
-    # For demo purposes, we'll use the chat completion directly
-    
-    from openai import AzureOpenAI
-    
-    credential = DefaultAzureCredential()
-    
-    client = AzureOpenAI(
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        azure_ad_token_provider=lambda: credential.get_token(
-            "https://cognitiveservices.azure.com/.default"
-        ).token,
-        api_version="2024-02-01"
-    )
-    
-    # Simulate RAG response (in production, this calls your Prompt Flow endpoint)
-    response = client.chat.completions.create(
-        model=AZURE_OPENAI_DEPLOYMENT,
+    # Generate response using Foundry-deployed model
+    response = openai_client.chat.completions.create(
+        model=CHAT_MODEL,
         messages=[
             {"role": "system", "content": "You are a helpful customer support assistant for Wall-E Electronics."},
             {"role": "user", "content": question}
@@ -320,17 +309,15 @@ def generate_html_report(file_path: Path, timestamp: str, dataset_size: int, met
 
 def main():
     print("=" * 60)
-    print("  LLMOps Workshop - RAG Evaluation")
+    print("  Microsoft Foundry - RAG Evaluation")
     print("=" * 60)
-    
-    # Validate environment
-    if not AZURE_OPENAI_ENDPOINT:
-        print("\n⚠️  AZURE_OPENAI_ENDPOINT not set. Using default.")
     
     # Initialize credentials
     print("\n[1/5] Authenticating with Azure...")
     credential = DefaultAzureCredential()
     print("  ✓ Using DefaultAzureCredential (RBAC)")
+    print(f"  ✓ Foundry Project: {AZURE_PROJECT_NAME}")
+    print(f"  ✓ Foundry Endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
     
     # Load evaluation data
     print("\n[2/5] Loading evaluation dataset...")
@@ -343,13 +330,35 @@ def main():
     else:
         print(f"  ✓ Loaded {len(eval_data)} evaluation samples")
     
-    # Initialize evaluators
-    print("\n[3/5] Initializing evaluators...")
+    # Initialize evaluators using Foundry connection to Azure OpenAI
+    print("\n[3/5] Initializing evaluators via Microsoft Foundry...")
     
+    # Get Azure OpenAI endpoint from Foundry connection
+    project_client = AIProjectClient(
+        endpoint=FOUNDRY_PROJECT_ENDPOINT,
+        credential=credential,
+    )
+    
+    # Get the Azure OpenAI connection details - try connection first, fallback to AI Services
+    try:
+        aoai_connection = project_client.connections.get("aoai-connection")
+        aoai_endpoint = aoai_connection.target
+    except Exception:
+        # No separate AOAI connection - use AI Services endpoint directly
+        aoai_endpoint = FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0].replace('.services.ai.azure.com', '.cognitiveservices.azure.com') + '/'
+    
+    print(f"  ✓ Connected to Azure OpenAI: {aoai_endpoint}")
+    
+    # Set environment variables for evaluators (they read from env)
+    import os
+    os.environ["AZURE_OPENAI_ENDPOINT"] = aoai_endpoint
+    os.environ["AZURE_OPENAI_DEPLOYMENT"] = CHAT_MODEL
+    os.environ["AZURE_OPENAI_API_VERSION"] = "2024-06-01"
+    
+    # Model config for evaluators - minimal config, auth via DefaultAzureCredential
     model_config = {
-        "azure_endpoint": AZURE_OPENAI_ENDPOINT,
-        "azure_deployment": AZURE_OPENAI_DEPLOYMENT,
-        "api_version": "2024-02-01"
+        "azure_endpoint": aoai_endpoint,
+        "azure_deployment": CHAT_MODEL,
     }
     
     evaluators = {
@@ -359,6 +368,7 @@ def main():
         # For production, convert data to conversation format or use individual call API
     }
     print(f"  ✓ Initialized {len(evaluators)} evaluators")
+    print(f"  ✓ Using model: {CHAT_MODEL}")
     
     # Prepare evaluation data
     print("\n[4/5] Running evaluation...")

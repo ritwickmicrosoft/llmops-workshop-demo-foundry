@@ -5,14 +5,14 @@ Tests content safety filters by sending test prompts and verifying blocking beha
 Generates an HTML report with results and recommendations.
 
 Authentication: DefaultAzureCredential (RBAC)
+Microsoft Foundry: Uses AIProjectClient for inference
 
-Azure OpenAI Default Content Filters:
-- Hate speech (severity: medium)
-- Sexual content (severity: medium)  
-- Violence (severity: medium)
-- Self-harm (severity: medium)
-
-Note: Jailbreak/Prompt Injection detection requires custom content filter config.
+Content Safety Features in Foundry:
+- Hate speech filtering
+- Sexual content filtering  
+- Violence filtering
+- Self-harm filtering
+- Jailbreak/Prompt Injection detection (via Guardrails)
 """
 
 import os
@@ -20,12 +20,18 @@ import json
 from datetime import datetime
 from pathlib import Path
 from azure.identity import DefaultAzureCredential
+from azure.ai.projects import AIProjectClient
 from openai import AzureOpenAI
 
 
-# Configuration
-AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "https://aoai-llmops-eastus.openai.azure.com/")
-AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+# Configuration - Microsoft Foundry
+# Use the project endpoint from Foundry portal: Overview > Endpoints and keys
+FOUNDRY_PROJECT_ENDPOINT = os.environ.get(
+    "FOUNDRY_PROJECT_ENDPOINT", 
+    "https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo"
+)
+FOUNDRY_PROJECT_NAME = os.environ.get("FOUNDRY_PROJECT_NAME", "proj-llmops-demo")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "gpt-4o")
 RESULTS_PATH = Path(__file__).parent / "test_results"
 
 # Test cases for content safety
@@ -97,8 +103,8 @@ TEST_CASES = [
 ]
 
 
-def run_test(client: AzureOpenAI, test_case: dict) -> dict:
-    """Run a single content safety test."""
+def run_test(openai_client, test_case: dict) -> dict:
+    """Run a single content safety test using Microsoft Foundry."""
     result = {
         "name": test_case["name"],
         "prompt": test_case["prompt"],
@@ -114,8 +120,8 @@ def run_test(client: AzureOpenAI, test_case: dict) -> dict:
     }
     
     try:
-        response = client.chat.completions.create(
-            model=AZURE_OPENAI_DEPLOYMENT,
+        response = openai_client.chat.completions.create(
+            model=CHAT_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -405,21 +411,34 @@ def generate_html_report(results: list, passed: int, failed: int, timestamp: str
 
 def main():
     print("=" * 60)
-    print("  LLMOps Workshop - Content Safety Testing")
+    print("  Microsoft Foundry - Content Safety Testing")
     print("=" * 60)
     
-    # Initialize credentials
-    print("\n[1/4] Authenticating with Azure...")
+    # Initialize Foundry client
+    print("\n[1/4] Connecting to Microsoft Foundry...")
     credential = DefaultAzureCredential()
-    token = credential.get_token("https://cognitiveservices.azure.com/.default").token
     
-    client = AzureOpenAI(
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        azure_ad_token=token,
-        api_version="2024-02-01"
+    project_client = AIProjectClient(
+        endpoint=FOUNDRY_PROJECT_ENDPOINT,
+        credential=credential
     )
-    print(f"  ✓ Connected to: {AZURE_OPENAI_ENDPOINT}")
-    print(f"  ✓ Deployment: {AZURE_OPENAI_DEPLOYMENT}")
+    
+    # Get Azure OpenAI endpoint - try connection first, fallback to AI Services endpoint
+    try:
+        aoai_connection = project_client.connections.get('aoai-connection')
+        aoai_endpoint = aoai_connection.target
+    except Exception:
+        # No separate AOAI connection - use AI Services endpoint directly
+        aoai_endpoint = FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0].replace('.services.ai.azure.com', '.cognitiveservices.azure.com') + '/'
+    
+    openai_client = AzureOpenAI(
+        azure_endpoint=aoai_endpoint,
+        azure_ad_token_provider=lambda: credential.get_token('https://cognitiveservices.azure.com/.default').token,
+        api_version='2024-02-01'
+    )
+    print(f"  Foundry Project Endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
+    print(f"  Azure OpenAI: {aoai_endpoint}")
+    print(f"  Model: {CHAT_MODEL}")
     
     # Run tests
     print(f"\n[2/4] Running {len(TEST_CASES)} content safety tests...")
@@ -433,7 +452,7 @@ def main():
         print(f"\n  Test {i}/{len(TEST_CASES)}: {test_case['name']}")
         print(f"  Type: {test_case['test_type']} | Category: {test_case.get('category', 'N/A')}")
         
-        result = run_test(client, test_case)
+        result = run_test(openai_client, test_case)
         results.append(result)
         
         if result["passed"]:

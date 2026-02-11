@@ -31,6 +31,7 @@ from azure.search.documents.indexes.models import (
     SemanticPrioritizedFields,
     SemanticSearch,
 )
+from azure.ai.projects import AIProjectClient
 from openai import AzureOpenAI
 
 # Try to import PyPDF2 for PDF support
@@ -43,9 +44,19 @@ except ImportError:
     print("Install with: pip install PyPDF2")
 
 # Configuration from environment variables
-AZURE_SEARCH_ENDPOINT = os.environ.get("AZURE_SEARCH_ENDPOINT", "https://search-llmops-dev-naxfrjtmsmlvo.search.windows.net")
-AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "https://aoai-llmops-eastus.openai.azure.com/")
-EMBEDDING_MODEL = os.environ.get("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-large")
+# Microsoft Foundry Project Configuration
+# Use the project endpoint from Foundry portal: Overview > Endpoints and keys
+FOUNDRY_PROJECT_ENDPOINT = os.environ.get(
+    "FOUNDRY_PROJECT_ENDPOINT", 
+    "https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo"
+)
+FOUNDRY_PROJECT_NAME = os.environ.get("FOUNDRY_PROJECT_NAME", "proj-llmops-demo")
+
+# Azure AI Search Configuration
+AZURE_SEARCH_ENDPOINT = os.environ.get("AZURE_SEARCH_ENDPOINT", "https://search-llmops-canadaeast.search.windows.net")
+
+# Model deployed in Foundry (from Model Catalog)
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
 INDEX_NAME = os.environ.get("AZURE_SEARCH_INDEX_NAME", "walle-products")
 
 # Path to data folder (relative to script location)
@@ -198,8 +209,8 @@ def create_search_index(index_client: SearchIndexClient) -> None:
     print(f"  Created index: {INDEX_NAME}")
 
 
-def generate_embeddings(openai_client: AzureOpenAI, text: str) -> list:
-    """Generate embeddings for a text using Azure OpenAI."""
+def generate_embeddings(openai_client, text: str) -> list:
+    """Generate embeddings for a text using Microsoft Foundry via OpenAI client."""
     # Truncate text if too long (max ~8000 tokens for text-embedding-3-large)
     max_chars = 30000
     if len(text) > max_chars:
@@ -212,15 +223,15 @@ def generate_embeddings(openai_client: AzureOpenAI, text: str) -> list:
     return response.data[0].embedding
 
 
-def index_documents(search_client: SearchClient, openai_client: AzureOpenAI, documents: list) -> None:
-    """Generate embeddings and index documents."""
+def index_documents(search_client: SearchClient, openai_client, documents: list) -> None:
+    """Generate embeddings and index documents using Microsoft Foundry."""
     
     indexed_docs = []
     
     for doc in documents:
         print(f"  Processing: {doc['title'][:50]}...")
         
-        # Generate embedding for content
+        # Generate embedding for content using Foundry
         embedding = generate_embeddings(openai_client, doc["content"])
         
         # Prepare document for indexing
@@ -247,7 +258,7 @@ def main():
     
     print("=" * 60)
     print("  Wall-E Electronics - Document Indexer")
-    print("  LLMOps Workshop Demo")
+    print("  Microsoft Foundry - LLMOps Workshop Demo")
     print("=" * 60)
     
     # Initialize Azure credential
@@ -256,8 +267,34 @@ def main():
     print("  Using DefaultAzureCredential (RBAC)")
     
     # Initialize clients
-    print("\n[2/5] Initializing clients...")
+    print("\n[2/5] Initializing Microsoft Foundry & Search clients...")
     
+    # Initialize Microsoft Foundry Project Client using project endpoint
+    project_client = AIProjectClient(
+        endpoint=FOUNDRY_PROJECT_ENDPOINT,
+        credential=credential
+    )
+    print(f"  Foundry project endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
+    
+    # Get Azure OpenAI endpoint - try connection first, fallback to AI Services endpoint
+    try:
+        aoai_connection = project_client.connections.get('aoai-connection')
+        aoai_endpoint = aoai_connection.target
+        print(f"  Azure OpenAI endpoint (via connection): {aoai_endpoint}")
+    except Exception:
+        # No separate AOAI connection - use AI Services endpoint directly
+        # Extract base endpoint from project endpoint (remove /api/projects/...)
+        aoai_endpoint = FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0].replace('.services.ai.azure.com', '.cognitiveservices.azure.com') + '/'
+        print(f"  Azure OpenAI endpoint (AI Services): {aoai_endpoint}")
+    
+    openai_client = AzureOpenAI(
+        azure_endpoint=aoai_endpoint,
+        azure_ad_token_provider=lambda: credential.get_token('https://cognitiveservices.azure.com/.default').token,
+        api_version='2024-02-01'
+    )
+    print(f"  Embedding model: {EMBEDDING_MODEL}")
+    
+    # Initialize Azure AI Search clients
     index_client = SearchIndexClient(
         endpoint=AZURE_SEARCH_ENDPOINT,
         credential=credential
@@ -269,14 +306,6 @@ def main():
         index_name=INDEX_NAME,
         credential=credential
     )
-    
-    openai_client = AzureOpenAI(
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        azure_ad_token_provider=lambda: credential.get_token("https://cognitiveservices.azure.com/.default").token,
-        api_version="2024-02-01"
-    )
-    print(f"  OpenAI endpoint: {AZURE_OPENAI_ENDPOINT}")
-    print(f"  Embedding model: {EMBEDDING_MODEL}")
     
     # Load documents from data folder
     print(f"\n[3/5] Loading documents from {DATA_FOLDER}...")
@@ -299,9 +328,11 @@ def main():
     print("\n" + "=" * 60)
     print("  Indexing Complete!")
     print("=" * 60)
-    print(f"\n  Index: {INDEX_NAME}")
+    print(f"\n  Microsoft Foundry Project: {FOUNDRY_PROJECT_NAME}")
+    print(f"  Project Endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
+    print(f"  Search Index: {INDEX_NAME}")
     print(f"  Documents: {len(documents)}")
-    print(f"  Endpoint: {AZURE_SEARCH_ENDPOINT}")
+    print(f"  Search Endpoint: {AZURE_SEARCH_ENDPOINT}")
     print("\n  Document files processed:")
     for doc in documents:
         print(f"    - {doc['source_file']} ({doc['category']})")

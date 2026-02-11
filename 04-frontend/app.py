@@ -18,37 +18,49 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.ai.projects import AIProjectClient
 from openai import AzureOpenAI
+
+# Tracing imports
+try:
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
+    import os
+    # Enable content capture via environment variable
+    os.environ["OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"] = "true"
+    TRACING_AVAILABLE = True
+except ImportError:
+    TRACING_AVAILABLE = False
+    print("⚠ Tracing packages not installed. Run: pip install azure-monitor-opentelemetry opentelemetry-instrumentation-flask opentelemetry-instrumentation-openai-v2")
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
 # =============================================================================
-# Configuration - Azure AI Foundry
+# Configuration - Microsoft Foundry
 # =============================================================================
 
-# Azure AI Foundry Resource & Project info
-AI_FOUNDRY_RESOURCE = "foundry-llmops-demo"
-AI_FOUNDRY_PROJECT = "proj-llmops-demo"
-RESOURCE_GROUP = "rg-llmops-demo"
-SUBSCRIPTION_ID = "1d53bfb3-a84c-4eb4-8c79-f29dc8424b6a"
-FOUNDRY_ENDPOINT = "https://foundry-llmops-demo.services.ai.azure.com/"
-
-# Azure OpenAI endpoint (from Hub connection: aoai-connection)
-AZURE_OPENAI_ENDPOINT = os.environ.get(
-    "AZURE_OPENAI_ENDPOINT", 
-    "https://aoai-llmops-eastus.openai.azure.com/"
+# Microsoft Foundry Project Configuration
+# Use the project endpoint from Foundry portal: Overview > Endpoints and keys
+FOUNDRY_PROJECT_ENDPOINT = os.environ.get(
+    "FOUNDRY_PROJECT_ENDPOINT", 
+    "https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo"
 )
+AI_FOUNDRY_RESOURCE = "foundry-llmops-canadaeast"
+AI_FOUNDRY_PROJECT = os.environ.get("FOUNDRY_PROJECT_NAME", "proj-llmops-demo")
+RESOURCE_GROUP = os.environ.get("AZURE_RESOURCE_GROUP", "rg-llmops-demo")
+SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID", "1d53bfb3-a84c-4eb4-8c79-f29dc8424b6a")
 
-# Azure AI Search endpoint (from Hub connection: search-connection)
+# Azure AI Search endpoint (connected via Foundry Hub)
 AZURE_SEARCH_ENDPOINT = os.environ.get(
     "AZURE_SEARCH_ENDPOINT",
-    "https://search-llmops-dev-naxfrjtmsmlvo.search.windows.net"
+    "https://search-llmops-canadaeast.search.windows.net"
 )
 
-# Model configurations
-CHAT_MODEL_DEPLOYMENT = os.environ.get("AZURE_OPENAI_CHAT_DEPLOYMENT", "gpt-4o")
-EMBEDDING_MODEL_DEPLOYMENT = os.environ.get("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-large")
+# Model configurations (deployed via Foundry Model Catalog)
+CHAT_MODEL_DEPLOYMENT = os.environ.get("CHAT_MODEL", "gpt-4o")
+EMBEDDING_MODEL_DEPLOYMENT = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
 SEARCH_INDEX_NAME = os.environ.get("AZURE_SEARCH_INDEX_NAME", "walle-products")
 
 # System prompt for the chatbot
@@ -87,45 +99,101 @@ credential = get_credential()
 
 
 # =============================================================================
-# AI Foundry OpenAI Client (uses Hub connection)
+# Microsoft Foundry Project Client
 # =============================================================================
 
-def get_openai_client():
+def get_project_client():
     """
-    Get Azure OpenAI client.
-    Uses AI Foundry Hub connection (aoai-connection) with RBAC authentication.
+    Get Microsoft Foundry Project Client.
+    Uses the project endpoint directly - no separate Azure OpenAI resource needed.
     """
-    return AzureOpenAI(
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        azure_ad_token_provider=lambda: credential.get_token(
-            "https://cognitiveservices.azure.com/.default"
-        ).token,
-        api_version="2024-02-01"
+    return AIProjectClient(
+        endpoint=FOUNDRY_PROJECT_ENDPOINT,
+        credential=credential
     )
 
+# Initialize project client and OpenAI client via Foundry connection
+project_client = get_project_client()
 
 # =============================================================================
-# RAG Pipeline using AI Foundry Connected Services
+# Tracing Configuration - Sends telemetry to Foundry Portal
+# =============================================================================
+
+def setup_tracing():
+    """
+    Configure Azure Monitor tracing for Foundry portal visibility.
+    Traces will appear in Foundry Portal > Tracing tab.
+    """
+    if not TRACING_AVAILABLE:
+        print("  ⚠ Tracing not available - install azure-monitor-opentelemetry")
+        return False
+    
+    try:
+        # Get Application Insights connection string from Foundry project
+        app_insights_conn_str = project_client.telemetry.get_application_insights_connection_string()
+        
+        if app_insights_conn_str:
+            # Configure Azure Monitor with the connection string
+            configure_azure_monitor(
+                connection_string=app_insights_conn_str,
+                enable_live_metrics=True,
+            )
+            
+            # Instrument Flask app for automatic request tracing
+            FlaskInstrumentor().instrument_app(app)
+            
+            # Instrument OpenAI for LLM call tracing 
+            # capture_content=True shows actual prompts and responses in traces
+            OpenAIInstrumentor().instrument(capture_content=True)
+            
+            print(f"  ✓ Tracing enabled - View in Foundry Portal > Tracing")
+            return True
+        else:
+            print("  ⚠ No Application Insights connection found in Foundry project")
+            return False
+    except Exception as e:
+        print(f"  ⚠ Tracing setup failed: {e}")
+        return False
+
+# Setup tracing (optional - continues without if unavailable)
+tracing_enabled = setup_tracing()
+
+# Get Azure OpenAI endpoint - try connection first, fallback to AI Services endpoint
+try:
+    aoai_connection = project_client.connections.get('aoai-connection')
+    aoai_endpoint = aoai_connection.target
+except Exception:
+    # No separate AOAI connection - use AI Services endpoint directly
+    aoai_endpoint = FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0].replace('.services.ai.azure.com', '.cognitiveservices.azure.com') + '/'
+
+openai_client = AzureOpenAI(
+    azure_endpoint=aoai_endpoint,
+    azure_ad_token_provider=lambda: credential.get_token('https://cognitiveservices.azure.com/.default').token,
+    api_version='2024-02-01'
+)
+
+
+# =============================================================================
+# RAG Pipeline using Microsoft Foundry Services
 # =============================================================================
 
 def search_documents(query: str) -> str:
     """
     Search for relevant documents using Azure AI Search.
-    Uses AI Foundry Hub connection (search-connection) with RBAC authentication.
+    Uses Foundry-connected AI Search with RBAC authentication.
     """
     try:
         from azure.search.documents import SearchClient
         from azure.search.documents.models import VectorizedQuery
         
-        # Connect to AI Search using Hub connection endpoint
+        # Connect to AI Search
         search_client = SearchClient(
             endpoint=AZURE_SEARCH_ENDPOINT,
             index_name=SEARCH_INDEX_NAME,
             credential=credential
         )
         
-        # Get embedding using OpenAI (from Hub connection)
-        openai_client = get_openai_client()
+        # Get embedding using Microsoft Foundry via OpenAI client
         embedding_response = openai_client.embeddings.create(
             input=query,
             model=EMBEDDING_MODEL_DEPLOYMENT
@@ -162,17 +230,16 @@ def search_documents(query: str) -> str:
 
 def generate_response(message: str, history: list, context: str = "") -> dict:
     """
-    Generate response using Azure OpenAI via AI Foundry Hub connection.
+    Generate response using Microsoft Foundry via OpenAI client.
+    No separate Azure OpenAI resource needed.
     """
     try:
-        openai_client = get_openai_client()
-        
         # Build system prompt with context
         system_content = SYSTEM_PROMPT
         if context:
             system_content += f"\n\n# Retrieved Information:\n{context}"
         
-        # Build messages
+        # Build messages for chat completion
         messages = [{"role": "system", "content": system_content}]
         
         # Add history (last 10 messages)
@@ -185,7 +252,7 @@ def generate_response(message: str, history: list, context: str = "") -> dict:
         # Add current message
         messages.append({"role": "user", "content": message})
         
-        # Call Azure OpenAI (via Hub connection)
+        # Call Microsoft Foundry via OpenAI client
         response = openai_client.chat.completions.create(
             model=CHAT_MODEL_DEPLOYMENT,
             messages=messages,
@@ -196,9 +263,10 @@ def generate_response(message: str, history: list, context: str = "") -> dict:
         return {
             'response': response.choices[0].message.content,
             'context_used': bool(context),
-            'source': 'Azure AI Foundry',
+            'source': 'Microsoft Foundry',
             'resource': AI_FOUNDRY_RESOURCE,
             'project': AI_FOUNDRY_PROJECT,
+            'project_endpoint': FOUNDRY_PROJECT_ENDPOINT,
             'model': CHAT_MODEL_DEPLOYMENT,
             'usage': {
                 'prompt_tokens': response.usage.prompt_tokens,
@@ -236,12 +304,12 @@ def chat():
         if not message:
             return jsonify({'error': 'Message is required'}), 400
         
-        # Get relevant context using AI Search (Hub connection)
+        # Get relevant context using Azure AI Search
         context = ""
         if use_rag:
             context = search_documents(message)
         
-        # Generate response using OpenAI (Hub connection)
+        # Generate response using Microsoft Foundry
         result = generate_response(message, history, context)
         
         return jsonify(result)
@@ -252,29 +320,26 @@ def chat():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    """Health check - shows Azure AI Foundry connectivity."""
+    """Health check - shows Microsoft Foundry connectivity."""
     return jsonify({
         'status': 'healthy',
         'auth': 'RBAC (Managed Identity / Azure CLI)',
-        'mode': 'Azure AI Foundry',
+        'mode': 'Microsoft Foundry',
         'foundry': {
             'resource': AI_FOUNDRY_RESOURCE,
             'project': AI_FOUNDRY_PROJECT,
             'resource_group': RESOURCE_GROUP,
-            'endpoint': FOUNDRY_ENDPOINT
+            'project_endpoint': FOUNDRY_PROJECT_ENDPOINT
         },
-        'connections': {
-            'aoai-connection': {
-                'type': 'Azure OpenAI',
-                'endpoint': AZURE_OPENAI_ENDPOINT,
-                'chat_model': CHAT_MODEL_DEPLOYMENT,
-                'embedding_model': EMBEDDING_MODEL_DEPLOYMENT
-            },
-            'search-connection': {
-                'type': 'Azure AI Search',
-                'endpoint': AZURE_SEARCH_ENDPOINT,
-                'index': SEARCH_INDEX_NAME
-            }
+        'inference': {
+            'type': 'Microsoft Foundry Inference API',
+            'chat_model': CHAT_MODEL_DEPLOYMENT,
+            'embedding_model': EMBEDDING_MODEL_DEPLOYMENT
+        },
+        'search': {
+            'type': 'Azure AI Search',
+            'endpoint': AZURE_SEARCH_ENDPOINT,
+            'index': SEARCH_INDEX_NAME
         }
     })
 
@@ -283,11 +348,10 @@ def health():
 def get_config():
     """Return configuration for frontend display."""
     return jsonify({
-        'mode': 'Azure AI Foundry',
+        'mode': 'Microsoft Foundry',
         'resource': AI_FOUNDRY_RESOURCE,
         'project': AI_FOUNDRY_PROJECT,
-        'foundry_endpoint': FOUNDRY_ENDPOINT,
-        'openai_endpoint': AZURE_OPENAI_ENDPOINT,
+        'foundry_project_endpoint': FOUNDRY_PROJECT_ENDPOINT,
         'search_endpoint': AZURE_SEARCH_ENDPOINT,
         'chat_model': CHAT_MODEL_DEPLOYMENT,
         'embedding_model': EMBEDDING_MODEL_DEPLOYMENT,
@@ -297,28 +361,26 @@ def get_config():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("  🤖 Wall-E Electronics - RAG Chatbot")
-    print("  Powered by Azure AI Foundry")
+    print("  Wall-E Electronics - RAG Chatbot")
+    print("  Powered by Microsoft Foundry")
     print("=" * 60)
     
-    print("\n  🔐 Authentication: RBAC (Managed Identity / Azure CLI)")
+    print("\n  Authentication: RBAC (Managed Identity / Azure CLI)")
     
-    print(f"\n  🏗️  Azure AI Foundry:")
-    print(f"    • Resource: {AI_FOUNDRY_RESOURCE}")
-    print(f"    • Project: {AI_FOUNDRY_PROJECT}")
-    print(f"    • Endpoint: {FOUNDRY_ENDPOINT}")
-    print(f"    • Resource Group: {RESOURCE_GROUP}")
+    print(f"\n  Microsoft Foundry:")
+    print(f"    - Resource: {AI_FOUNDRY_RESOURCE}")
+    print(f"    - Project: {AI_FOUNDRY_PROJECT}")
+    print(f"    - Project Endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
     
-    print(f"\n  📡 Foundry Connections:")
-    print(f"    • aoai-connection → Azure OpenAI")
-    print(f"      Endpoint: {AZURE_OPENAI_ENDPOINT}")
-    print(f"      Chat Model: {CHAT_MODEL_DEPLOYMENT}")
-    print(f"      Embedding Model: {EMBEDDING_MODEL_DEPLOYMENT}")
-    print(f"    • search-connection → Azure AI Search")
-    print(f"      Endpoint: {AZURE_SEARCH_ENDPOINT}")
-    print(f"      Index: {SEARCH_INDEX_NAME}")
+    print(f"\n  Inference (via Foundry - no separate Azure OpenAI):")
+    print(f"    - Chat Model: {CHAT_MODEL_DEPLOYMENT}")
+    print(f"    - Embedding Model: {EMBEDDING_MODEL_DEPLOYMENT}")
     
-    print("\n  🚀 Starting server at http://localhost:5000")
+    print(f"\n  Azure AI Search:")
+    print(f"    - Endpoint: {AZURE_SEARCH_ENDPOINT}")
+    print(f"    - Index: {SEARCH_INDEX_NAME}")
+    
+    print("\n  Starting server at http://localhost:5000")
     print("=" * 60)
     
     app.run(host='0.0.0.0', port=5000, debug=True)

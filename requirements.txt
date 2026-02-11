@@ -1,18 +1,26 @@
 # LLMOps Workshop - Python Dependencies
 # ======================================
+# Uses Microsoft Foundry SDK (no separate Azure OpenAI required)
 # Install with: pip install -r requirements.txt
 
 # Azure Identity (for RBAC authentication)
-azure-identity>=1.15.0
+azure-identity>=1.19.0
 
-# Azure AI Services
-azure-ai-evaluation>=1.0.0b1
-azure-ai-projects>=1.0.0b1
-azure-search-documents>=11.4.0
+# Microsoft Foundry SDK (core dependency for all AI operations)
+azure-ai-projects>=1.0.0b11
+azure-ai-inference>=1.0.0b9
+
+# Azure AI Evaluation (uses Foundry project for evaluators)
+azure-ai-evaluation>=1.0.0b7
+
+# Azure AI Search (for RAG vector store)
+azure-search-documents>=11.6.0
+
+# Azure Content Safety (for content moderation)
+azure-ai-contentsafety>=1.0.0
+
+# Azure Management (for resource configuration)
 azure-mgmt-cognitiveservices>=13.5.0
-
-# Azure OpenAI
-openai>=1.12.0
 
 # Web Frontend
 flask>=3.0.0
@@ -24,3 +32,9 @@ rich>=13.7.0
 
 # Document Processing
 PyPDF2>=3.0.0
+
+# OpenTelemetry for Foundry Tracing
+opentelemetry-sdk>=1.27.0
+azure-monitor-opentelemetry>=1.6.0
+opentelemetry-instrumentation-flask>=0.46b0
+opentelemetry-instrumentation-openai-v2>=2.0b0

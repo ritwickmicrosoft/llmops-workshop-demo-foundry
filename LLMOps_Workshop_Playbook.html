@@ -276,8 +276,8 @@ az account show --query "{name:name, id:id}" -o table</pre>
         <div class="step-desc">These variables are used throughout the workshop:</div>
         <pre># PowerShell
 $env:AZURE_SUBSCRIPTION_ID = (az account show --query id -o tsv)
-$env:AZURE_RESOURCE_GROUP = "rg-llmops-demo"
-$env:AZURE_LOCATION = "eastus"</pre>
+$env:AZURE_RESOURCE_GROUP = "rg-llmops-canadaeast"
+$env:AZURE_LOCATION = "canadaeast"</pre>
       </div>
     </div>
 
@@ -312,32 +312,25 @@ $env:AZURE_LOCATION = "eastus"</pre>
         <div class="step-title">Create Azure AI Foundry Resource</div>
         <div class="step-desc">This creates the AI Foundry resource with public network access enabled:</div>
         <pre>az cognitiveservices account create `
-  --name "foundry-llmops-demo" `
+  --name "foundry-llmops-canadaeast" `
   --resource-group $env:AZURE_RESOURCE_GROUP `
   --location $env:AZURE_LOCATION `
   --kind AIServices `
   --sku S0 `
-  --custom-domain "foundry-llmops-demo"</pre>
+  --custom-domain "foundry-llmops-canadaeast"</pre>
       </div>
     </div>
 
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-content">
-        <div class="step-title">Create Azure OpenAI Resource</div>
-        <div class="step-desc">We create a separate OpenAI resource for model deployments:</div>
-        <pre>az cognitiveservices account create `
-  --name "aoai-llmops-demo" `
+        <div class="step-title">Create Foundry Project</div>
+        <div class="step-desc">Create a project within the AI Services resource:</div>
+        <pre>az cognitiveservices account project create `
+  --project-name "proj-llmops-demo" `
+  --name "foundry-llmops-canadaeast" `
   --resource-group $env:AZURE_RESOURCE_GROUP `
-  --location $env:AZURE_LOCATION `
-  --kind OpenAI `
-  --sku S0 `
-  --custom-domain "aoai-llmops-demo"
-
-# Disable key-based auth (RBAC only)
-az resource update `
-  --ids $(az cognitiveservices account show --name aoai-llmops-demo --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv) `
-  --set properties.disableLocalAuth=true properties.publicNetworkAccess=Enabled</pre>
+  --location $env:AZURE_LOCATION</pre>
       </div>
     </div>
 
@@ -345,8 +338,9 @@ az resource update `
       <div class="step-num">4</div>
       <div class="step-content">
         <div class="step-title">Deploy GPT-4o Model</div>
+        <div class="step-desc">Deploy models directly to the AI Services resource (no separate Azure OpenAI needed):</div>
         <pre>az cognitiveservices account deployment create `
-  --name "aoai-llmops-demo" `
+  --name "foundry-llmops-canadaeast" `
   --resource-group $env:AZURE_RESOURCE_GROUP `
   --deployment-name "gpt-4o" `
   --model-name "gpt-4o" `
@@ -362,7 +356,7 @@ az resource update `
       <div class="step-content">
         <div class="step-title">Deploy Embedding Model</div>
         <pre>az cognitiveservices account deployment create `
-  --name "aoai-llmops-demo" `
+  --name "foundry-llmops-canadaeast" `
   --resource-group $env:AZURE_RESOURCE_GROUP `
   --deployment-name "text-embedding-3-large" `
   --model-name "text-embedding-3-large" `
@@ -378,7 +372,7 @@ az resource update `
       <div class="step-content">
         <div class="step-title">Create Azure AI Search</div>
         <pre>az search service create `
-  --name "search-llmops-demo" `
+  --name "search-llmops-canadaeast" `
   --resource-group $env:AZURE_RESOURCE_GROUP `
   --location $env:AZURE_LOCATION `
   --sku Basic `
@@ -399,18 +393,18 @@ $myId = (az ad signed-in-user show --query id -o tsv)
 az role assignment create `
   --assignee $myId `
   --role "Cognitive Services OpenAI User" `
-  --scope $(az cognitiveservices account show --name aoai-llmops-demo --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)
+  --scope $(az cognitiveservices account show --name foundry-llmops-canadaeast --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)
 
 # Search permissions
 az role assignment create `
   --assignee $myId `
   --role "Search Index Data Contributor" `
-  --scope $(az search service show --name search-llmops-demo --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)
+  --scope $(az search service show --name search-llmops-canadaeast --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)
 
 az role assignment create `
   --assignee $myId `
   --role "Search Service Contributor" `
-  --scope $(az search service show --name search-llmops-demo --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)</pre>
+  --scope $(az search service show --name search-llmops-canadaeast --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)</pre>
       </div>
     </div>
 
@@ -423,10 +417,10 @@ az role assignment create `
 Copy-Item .env.example .env
 
 # Edit .env with your endpoints:
-AZURE_OPENAI_ENDPOINT=https://aoai-llmops-demo.openai.azure.com/
-AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o
-AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-large
-AZURE_SEARCH_ENDPOINT=https://search-llmops-demo.search.windows.net
+FOUNDRY_PROJECT_ENDPOINT=https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo
+CHAT_MODEL=gpt-4o
+EMBEDDING_MODEL=text-embedding-3-large
+AZURE_SEARCH_ENDPOINT=https://search-llmops-canadaeast.search.windows.net
 AZURE_SEARCH_INDEX_NAME=walle-products</pre>
       </div>
     </div>
@@ -436,7 +430,7 @@ AZURE_SEARCH_INDEX_NAME=walle-products</pre>
     </div>
 
     <div class="note note-success">
-      <strong>Checkpoint:</strong> Run <code>az cognitiveservices account deployment list --name aoai-llmops-demo --resource-group $env:AZURE_RESOURCE_GROUP -o table</code> — you should see gpt-4o and text-embedding-3-large.
+      <strong>Checkpoint:</strong> Run <code>az cognitiveservices account deployment list --name foundry-llmops-canadaeast --resource-group $env:AZURE_RESOURCE_GROUP -o table</code> — you should see gpt-4o and text-embedding-3-large.
     </div>
   </section>
 
@@ -488,8 +482,8 @@ AZURE_SEARCH_INDEX_NAME=walle-products</pre>
   ✓ Using DefaultAzureCredential (RBAC)
 
 [2/4] Initializing clients...
-  ✓ Search Index Client: https://search-llmops-demo.search.windows.net
-  ✓ OpenAI Client: https://aoai-llmops-demo.openai.azure.com/
+  ✓ Foundry project endpoint: https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo
+  ✓ Search endpoint: https://search-llmops-canadaeast.search.windows.net
 
 [3/4] Creating search index...
   Created index: walle-products
@@ -515,7 +509,7 @@ AZURE_SEARCH_INDEX_NAME=walle-products</pre>
       <div class="step-num">4</div>
       <div class="step-content">
         <div class="step-title">Verify the index in Azure Portal (optional)</div>
-        <div class="step-desc">Open Azure Portal → AI Search → search-llmops-demo → Indexes → walle-products</div>
+        <div class="step-desc">Open Azure Portal → AI Search → search-llmops-canadaeast → Indexes → walle-products</div>
         <p style="font-size:12px;color:var(--muted);">You should see 8 documents with fields: id, title, category, content, last_updated, content_vector</p>
       </div>
     </div>
@@ -555,24 +549,23 @@ AZURE_SEARCH_INDEX_NAME=walle-products</pre>
         <div class="step-title">Expected startup output</div>
         <pre>============================================================
   🤖 Wall-E Electronics - RAG Chatbot
-  Powered by Azure AI Foundry
+  Powered by Microsoft Foundry
 ============================================================
 
   🔐 Authentication: RBAC (Managed Identity / Azure CLI)
 
-  🏗️  Azure AI Foundry:
-    • Resource: foundry-llmops-demo
+  🏗️  Microsoft Foundry:
+    • Resource: foundry-llmops-canadaeast
     • Project: proj-llmops-demo
-    • Endpoint: https://foundry-llmops-demo.services.ai.azure.com/
+    • Endpoint: https://foundry-llmops-canadaeast.services.ai.azure.com/
 
-  📡 Foundry Connections:
-    • aoai-connection → Azure OpenAI
-      Endpoint: https://aoai-llmops-demo.openai.azure.com/
-      Chat Model: gpt-4o
-      Embedding Model: text-embedding-3-large
-    • search-connection → Azure AI Search
-      Endpoint: https://search-llmops-demo.search.windows.net
-      Index: walle-products
+  📡 Inference (via Foundry - no separate Azure OpenAI):
+    • Chat Model: gpt-4o
+    • Embedding Model: text-embedding-3-large
+
+  🔍 Azure AI Search:
+    • Endpoint: https://search-llmops-canadaeast.search.windows.net
+    • Index: walle-products
 
   🚀 Starting server at http://localhost:5000
 ============================================================
@@ -695,7 +688,7 @@ What's the price of an iPhone?</pre>
 
     <h3>❌ "Model deployment not found"</h3>
     <ul>
-      <li>List deployments: <code>az cognitiveservices account deployment list --name aoai-llmops-demo --resource-group $env:AZURE_RESOURCE_GROUP -o table</code></li>
+      <li>List deployments: <code>az cognitiveservices account deployment list --name foundry-llmops-canadaeast --resource-group $env:AZURE_RESOURCE_GROUP -o table</code></li>
       <li>Deployment names must match exactly: <code>gpt-4o</code> and <code>text-embedding-3-large</code></li>
     </ul>
 
@@ -724,22 +717,14 @@ What's the price of an iPhone?</pre>
     <div class="step">
       <span class="num">1</span>
       <div>
-        <strong>Set environment variable</strong>
-        <pre>$env:AZURE_OPENAI_ENDPOINT = "https://aoai-llmops-eastus.openai.azure.com/"</pre>
+        <strong>Run evaluation script</strong>
+        <pre>python 02-evaluation/run_evaluation.py</pre>
+        <p style="font-size:11px;color:var(--muted);margin-top:5px;">Uses Foundry project endpoint from default config. Generates JSON results + HTML report in <code>02-evaluation/eval_results/</code></p>
       </div>
     </div>
 
     <div class="step">
       <span class="num">2</span>
-      <div>
-        <strong>Run evaluation script</strong>
-        <pre>python 02-evaluation/run_evaluation.py</pre>
-        <p style="font-size:11px;color:var(--muted);margin-top:5px;">Generates JSON results + HTML report in <code>02-evaluation/eval_results/</code></p>
-      </div>
-    </div>
-
-    <div class="step">
-      <span class="num">3</span>
       <div>
         <strong>Review metrics</strong>
         <table style="font-size:11px;margin:10px 0;border-collapse:collapse;width:100%;">
