@@ -6,13 +6,17 @@ flask-cors>=4.0.0
 gunicorn>=21.0.0
 
 # Azure Authentication (RBAC)
-azure-identity>=1.15.0
+azure-identity>=1.19.0
+
+# Microsoft Foundry SDK
+azure-ai-projects>=1.0.0b11
 
 # Tracing & Observability (for Foundry Portal)
 azure-monitor-opentelemetry>=1.6.0
 opentelemetry-instrumentation-flask>=0.46b0
+opentelemetry-instrumentation-openai-v2>=2.0b0
 
 # Azure AI Services
-azure-search-documents>=11.4.0
+azure-search-documents>=11.6.0
 openai>=1.12.0
 requests>=2.31.0
