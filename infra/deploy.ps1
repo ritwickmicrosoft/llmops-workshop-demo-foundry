@@ -7,10 +7,10 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [string]$ResourceGroupName = "rg-llmops-demo",
+    [string]$ResourceGroupName = "rg-llmops-canadaeast",
     
     [Parameter(Mandatory=$false)]
-    [string]$Location = "swedencentral",
+    [string]$Location = "canadaeast",
     
     [Parameter(Mandatory=$false)]
     [string]$Environment = "dev",

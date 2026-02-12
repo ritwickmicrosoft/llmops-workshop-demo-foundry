@@ -9,24 +9,26 @@ targetScope = 'subscription'
 
 // Parameters
 @description('Name of the resource group')
-param resourceGroupName string = 'rg-llmops-demo'
+param resourceGroupName string = 'rg-llmops-canadaeast'
 
 @description('Azure region for all resources')
 @allowed([
-  'swedencentral'
+  'canadaeast'
+  'canadacentral'
   'eastus'
   'eastus2'
   'westus'
   'westus3'
   'northcentralus'
   'southcentralus'
+  'swedencentral'
   'westeurope'
   'francecentral'
   'uksouth'
   'australiaeast'
   'japaneast'
 ])
-param location string = 'swedencentral'
+param location string = 'canadaeast'
 
 @description('Base name for all resources')
 param baseName string = 'llmops'

@@ -13,7 +13,7 @@ param(
     [string]$ResourceGroup = $env:AZURE_RESOURCE_GROUP,
     
     [Parameter(Mandatory=$false)]
-    [string]$Location = "swedencentral",
+    [string]$Location = "canadaeast",
     
     [Parameter(Mandatory=$false)]
     [string]$PromptFlowEndpoint = $env:AZURE_PROMPTFLOW_ENDPOINT,
