@@ -832,7 +832,26 @@ What's the price of an iPhone?</pre>
     <div class="step">
       <div class="step-num">1</div>
       <div class="step-content">
-        <div class="step-title">Understand the workflow</div>
+        <div class="step-title">Why would you swap a model?</div>
+        <div class="step-desc">In production LLM applications, model changes happen frequently:</div>
+        <table>
+          <tr><th>Trigger</th><th>Example</th></tr>
+          <tr><td><strong>Cost optimization</strong></td><td>gpt-4o → gpt-4o-mini (~15x cheaper per token) while maintaining acceptable quality</td></tr>
+          <tr><td><strong>Latency requirements</strong></td><td>Smaller models respond faster for real-time customer support scenarios</td></tr>
+          <tr><td><strong>New model version</strong></td><td>Azure ships gpt-4o <code>2024-11-20</code> with improved reasoning — validate before adopting</td></tr>
+          <tr><td><strong>Model deprecation</strong></td><td>Azure retires older model versions on published dates — forced migration</td></tr>
+          <tr><td><strong>Capacity/availability</strong></td><td>Quota limits or regional availability require switching model families</td></tr>
+        </table>
+        <div class="note note-warn" style="margin-top:8px;">
+          <strong>The risk:</strong> Swapping blindly can degrade answer quality — customers notice before your team does. This workflow prevents that by auto-evaluating both models on the same test set.
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Understand the safe-swap workflow</div>
         <div class="step-desc">The model swap script follows a safe promotion pattern:</div>
         <table>
           <tr><th>Step</th><th>What Happens</th></tr>
@@ -845,7 +864,7 @@ What's the price of an iPhone?</pre>
     </div>
 
     <div class="step">
-      <div class="step-num">2</div>
+      <div class="step-num">3</div>
       <div class="step-content">
         <div class="step-title">Deploy a candidate model (gpt-4o-mini)</div>
         <div class="step-desc">If not already deployed, add the candidate model:</div>
@@ -862,7 +881,7 @@ What's the price of an iPhone?</pre>
     </div>
 
     <div class="step">
-      <div class="step-num">3</div>
+      <div class="step-num">4</div>
       <div class="step-content">
         <div class="step-title">Run the model swap comparison</div>
         <pre>cd 05-model-swap
@@ -872,7 +891,7 @@ python model_swap_eval.py</pre>
     </div>
 
     <div class="step">
-      <div class="step-num">4</div>
+      <div class="step-num">5</div>
       <div class="step-content">
         <div class="step-title">Expected output</div>
         <pre>============================================================
@@ -902,7 +921,7 @@ python model_swap_eval.py</pre>
     </div>
 
     <div class="step">
-      <div class="step-num">5</div>
+      <div class="step-num">6</div>
       <div class="step-content">
         <div class="step-title">CLI options for advanced use</div>
         <pre># Specify different models
@@ -920,7 +939,7 @@ python model_swap_eval.py --max-regression 0.3</pre>
     </div>
 
     <div class="step">
-      <div class="step-num">6</div>
+      <div class="step-num">7</div>
       <div class="step-content">
         <div class="step-title">Review the HTML comparison report</div>
         <div class="step-desc">Open the generated report:</div>

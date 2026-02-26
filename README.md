@@ -348,6 +348,22 @@ python 02-evaluation/run_evaluation_enhanced.py --model gpt-4o-mini --ci
 
 ## Model Swap & Re-Evaluation
 
+### Why Model Swap?
+
+In production LLM applications, you frequently need to change models:
+
+| Trigger | Example |
+|---------|--------|
+| **Cost optimization** | gpt-4o → gpt-4o-mini (~15x cheaper per token) while maintaining quality |
+| **Latency** | Smaller models respond faster for real-time customer support |
+| **New model version** | Azure ships gpt-4o `2024-11-20` with improved reasoning — validate before adopting |
+| **Model deprecation** | Azure retires older model versions on published dates, forcing migration |
+| **Capacity/availability** | Quota limits or regional availability require switching model families |
+
+> **Risk:** Swapping blindly can degrade answer quality — customers notice before your team does. This workflow prevents that by auto-evaluating both models on the same test set and rejecting if quality drops.
+
+### How It Works
+
 The model swap script (`05-model-swap/model_swap_eval.py`) safely compares two models before swapping:
 
 1. Evaluates the **current** model (baseline)

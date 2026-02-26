@@ -4,6 +4,21 @@ LLMOps Workshop - Model Swap & Re-Evaluation Workflow
 Demonstrates how to safely replace a model and automatically re-run evaluations,
 comparing results side-by-side to decide whether to promote the change.
 
+Why Model Swap?
+  In production LLM applications, you will frequently need to change models:
+  - Cost optimization: switch from gpt-4o to gpt-4o-mini to reduce spend
+    (gpt-4o-mini is ~15x cheaper per token than gpt-4o)
+  - Latency requirements: smaller models respond faster for real-time use cases
+  - New model versions: Azure OpenAI regularly ships updated model versions
+    (e.g., gpt-4o 2024-08-06 → 2024-11-20) with improved capabilities
+  - Model deprecation: Azure retires older model versions on published dates,
+    forcing migration before the retirement deadline
+  - Capacity/availability: switch regions or model families due to quota limits
+
+  The risk of swapping blindly is quality regression — customers notice degraded
+  answers before your team does. This workflow prevents that by running the same
+  evaluation suite against both models and auto-rejecting if quality drops.
+
 Workflow:
   1. Run evaluation against the CURRENT model (e.g., gpt-4o)
   2. Swap to the CANDIDATE model (e.g., gpt-4o-mini)
