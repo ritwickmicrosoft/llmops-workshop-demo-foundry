@@ -1,0 +1,263 @@
+# =============================================================================
+# LLMOps Workshop - Azure DevOps CI/CD Pipeline
+# =============================================================================
+# Automated pipeline with evaluation gates for promoting LLM changes.
+#
+# Pipeline Flow:
+#   PR Created/Updated
+#     → Install dependencies
+#     → Run enhanced evaluation (4 metrics + promotion gate)
+#     → Run content safety tests
+#     → Publish reports as artifacts
+#     → Gate: block merge if evaluation fails
+#
+# Model Swap Flow (triggered by changes to model config):
+#     → Evaluate current model (baseline)
+#     → Evaluate candidate model
+#     → Compare side-by-side
+#     → Gate: block if candidate regresses
+#
+# Microsoft Foundry: foundry-llmops-canadaeast / proj-llmops-demo
+# =============================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+      - release/*
+  paths:
+    include:
+      - '01-rag-chatbot/**'
+      - '02-evaluation/**'
+      - '03-content-safety/**'
+      - '04-frontend/**'
+      - '05-model-swap/**'
+      - 'data/**'
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - '**/*.py'
+      - 'data/**'
+      - '02-evaluation/eval_dataset.jsonl'
+
+# =============================================================================
+# Variables
+# =============================================================================
+variables:
+  pythonVersion: '3.11'
+  # Microsoft Foundry configuration
+  FOUNDRY_PROJECT_ENDPOINT: 'https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo'
+  AZURE_PROJECT_NAME: 'proj-llmops-demo'
+  # Evaluation settings
+  CHAT_MODEL: 'gpt-4o'
+  CANDIDATE_MODEL: 'gpt-4o-mini'
+  EVAL_MAX_SAMPLES: '10'
+  # Promotion gate thresholds
+  GATE_THRESHOLD_GROUNDEDNESS: '4.0'
+  GATE_THRESHOLD_RELEVANCE: '4.0'
+  GATE_THRESHOLD_SIMILARITY: '3.5'
+  GATE_THRESHOLD_FLUENCY: '4.0'
+
+# =============================================================================
+# Stages
+# =============================================================================
+stages:
+
+# ---------------------------------------------------------------------------
+# Stage 1: Quality Evaluation Gate
+# ---------------------------------------------------------------------------
+- stage: EvaluationGate
+  displayName: 'Quality Evaluation Gate'
+  jobs:
+  - job: RunEvaluation
+    displayName: 'Run Enhanced Evaluation'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+      displayName: 'Set Python version'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      displayName: 'Install dependencies'
+
+    - task: AzureCLI@2
+      displayName: 'Run Enhanced Evaluation with Gate'
+      inputs:
+        azureSubscription: 'llmops-service-connection'  # Configure in Azure DevOps
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "=== Running Enhanced Evaluation ==="
+          echo "Model: $(CHAT_MODEL)"
+          echo "Foundry: $(FOUNDRY_PROJECT_ENDPOINT)"
+          
+          python 02-evaluation/run_evaluation_enhanced.py \
+            --model $(CHAT_MODEL) \
+            --threshold-groundedness $(GATE_THRESHOLD_GROUNDEDNESS) \
+            --threshold-relevance $(GATE_THRESHOLD_RELEVANCE) \
+            --threshold-similarity $(GATE_THRESHOLD_SIMILARITY) \
+            --threshold-fluency $(GATE_THRESHOLD_FLUENCY) \
+            --max-samples $(EVAL_MAX_SAMPLES) \
+            --output-json $(Build.ArtifactStagingDirectory)/eval_results.json \
+            --ci
+          
+          echo "=== Evaluation gate passed ==="
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Evaluation Results'
+      inputs:
+        PathtoPublish: '02-evaluation/eval_results'
+        ArtifactName: 'evaluation-reports'
+      condition: always()
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Gate Results JSON'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/eval_results.json'
+        ArtifactName: 'gate-results'
+      condition: always()
+
+# ---------------------------------------------------------------------------
+# Stage 2: Content Safety Gate
+# ---------------------------------------------------------------------------
+- stage: ContentSafetyGate
+  displayName: 'Content Safety Gate'
+  dependsOn: EvaluationGate
+  jobs:
+  - job: RunContentSafety
+    displayName: 'Run Content Safety Tests'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      displayName: 'Install dependencies'
+
+    - task: AzureCLI@2
+      displayName: 'Run Content Safety Tests'
+      inputs:
+        azureSubscription: 'llmops-service-connection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          python 03-content-safety/test_content_safety.py
+          
+          # Check pass rate from latest results
+          python 06-cicd/promotion_gate.py \
+            --check-content-safety \
+            --results-dir 03-content-safety/test_results \
+            --min-pass-rate 90
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Safety Reports'
+      inputs:
+        PathtoPublish: '03-content-safety/test_results'
+        ArtifactName: 'content-safety-reports'
+      condition: always()
+
+# ---------------------------------------------------------------------------
+# Stage 3: Model Swap Evaluation (only if model config changed)
+# ---------------------------------------------------------------------------
+- stage: ModelSwapGate
+  displayName: 'Model Swap Evaluation'
+  dependsOn: EvaluationGate
+  condition: |
+    and(
+      succeeded(),
+      or(
+        contains(variables['Build.SourceVersionMessage'], '[model-swap]'),
+        eq(variables['RUN_MODEL_SWAP'], 'true')
+      )
+    )
+  jobs:
+  - job: CompareModels
+    displayName: 'Compare Current vs Candidate Model'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      displayName: 'Install dependencies'
+
+    - task: AzureCLI@2
+      displayName: 'Run Model Comparison'
+      inputs:
+        azureSubscription: 'llmops-service-connection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "=== Model Swap Evaluation ==="
+          echo "Current: $(CHAT_MODEL)"
+          echo "Candidate: $(CANDIDATE_MODEL)"
+          
+          python 05-model-swap/model_swap_eval.py \
+            --current $(CHAT_MODEL) \
+            --candidate $(CANDIDATE_MODEL) \
+            --max-samples $(EVAL_MAX_SAMPLES) \
+            --ci
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Comparison Reports'
+      inputs:
+        PathtoPublish: '05-model-swap/comparison_results'
+        ArtifactName: 'model-comparison-reports'
+      condition: always()
+
+# ---------------------------------------------------------------------------
+# Stage 4: Deploy (only on main branch, after all gates pass)
+# ---------------------------------------------------------------------------
+- stage: Deploy
+  displayName: 'Deploy to Azure'
+  dependsOn:
+    - EvaluationGate
+    - ContentSafetyGate
+  condition: |
+    and(
+      succeeded('EvaluationGate'),
+      succeeded('ContentSafetyGate'),
+      eq(variables['Build.SourceBranch'], 'refs/heads/main')
+    )
+  jobs:
+  - deployment: DeployApp
+    displayName: 'Deploy RAG Chatbot'
+    environment: 'production'
+    pool:
+      vmImage: 'ubuntu-latest'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              echo "=== Deploying to Azure ==="
+              echo "All quality gates passed!"
+              echo "  ✓ Evaluation gate: PASSED"
+              echo "  ✓ Content safety gate: PASSED"
+              echo ""
+              echo "Deploying app from 04-frontend/..."
+              # In production: deploy to Azure App Service, Container Apps, etc.
+              # az webapp deploy --name <app-name> --resource-group <rg> --src-path 04-frontend/
+            displayName: 'Deploy Application'

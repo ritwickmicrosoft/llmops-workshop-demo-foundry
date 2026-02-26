@@ -83,9 +83,9 @@
   <header>
     <div class="logo">🤖</div>
     <div class="title">LLMOps Workshop Playbook</div>
-    <div class="subtitle">RAG Chatbot with Azure AI Foundry — Step-by-Step Hands-On Lab</div>
+    <div class="subtitle">RAG Chatbot + LLMOps with Azure AI Foundry — Step-by-Step Hands-On Lab</div>
     <div class="meta-row">
-      <div class="meta-item">⏱️ ~2 hours</div>
+      <div class="meta-item">⏱️ ~3 hours</div>
       <div class="meta-item">👥 Individual or team</div>
       <div class="meta-item">💻 VS Code + Azure CLI</div>
     </div>
@@ -96,6 +96,9 @@
       <span class="pill">RAG Pattern</span>
       <span class="pill">Vector Embeddings</span>
       <span class="pill">RBAC (No Keys)</span>
+      <span class="pill">Model Swap</span>
+      <span class="pill">CI/CD Gates</span>
+      <span class="pill">MLflow 2.18+</span>
     </div>
   </header>
 
@@ -209,6 +212,9 @@
     <a href="#m3" class="toc-item"><span class="toc-num">3</span> Create Vector Index</a>
     <a href="#m4" class="toc-item"><span class="toc-num">4</span> Run RAG Chatbot</a>
     <a href="#m5" class="toc-item"><span class="toc-num">5</span> Test &amp; Explore</a>
+    <a href="#m6" class="toc-item"><span class="toc-num">6</span> Model Swap</a>
+    <a href="#m7" class="toc-item"><span class="toc-num">7</span> CI/CD Gates</a>
+    <a href="#m8" class="toc-item"><span class="toc-num">8</span> MLflow GenAI Ops</a>
     <a href="#troubleshooting" class="toc-item"><span class="toc-num">?</span> Troubleshooting</a>
   </div>
 
@@ -811,6 +817,361 @@ What's the price of an iPhone?</pre>
     </div>
   </section>
 
+  <!-- Module 6: Model Swap + Re-Evaluation -->
+  <section id="m6" class="card module">
+    <div class="module-header">
+      <span class="module-number">6</span>
+      <span class="module-title">Model Swap + Re-Evaluation</span>
+      <span class="module-time">25 min</span>
+    </div>
+
+    <div class="note note-info">
+      Safely replace a production model (e.g., gpt-4o → gpt-4o-mini) by automatically running the same evaluation suite against both models and comparing results side-by-side. Uses the Foundry Model Catalog for model deployment.
+    </div>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Understand the workflow</div>
+        <div class="step-desc">The model swap script follows a safe promotion pattern:</div>
+        <table>
+          <tr><th>Step</th><th>What Happens</th></tr>
+          <tr><td>1. Baseline</td><td>Run 4-metric evaluation against the <strong>current</strong> model (gpt-4o)</td></tr>
+          <tr><td>2. Candidate</td><td>Run the <strong>same</strong> evaluation against the <strong>candidate</strong> model (gpt-4o-mini)</td></tr>
+          <tr><td>3. Compare</td><td>Side-by-side comparison of all metrics</td></tr>
+          <tr><td>4. Gate</td><td>Candidate must meet thresholds <strong>AND</strong> not regress more than 0.5 points</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Deploy a candidate model (gpt-4o-mini)</div>
+        <div class="step-desc">If not already deployed, add the candidate model:</div>
+        <pre>az cognitiveservices account deployment create `
+  --name "foundry-llmops-canadaeast" `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
+  --deployment-name "gpt-4o-mini" `
+  --model-name "gpt-4o-mini" `
+  --model-version "2024-07-18" `
+  --model-format OpenAI `
+  --sku-capacity 10 `
+  --sku-name Standard</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Run the model swap comparison</div>
+        <pre>cd 05-model-swap
+python model_swap_eval.py</pre>
+        <div class="step-desc">Default: compares gpt-4o (current) vs gpt-4o-mini (candidate). Uses <code>02-evaluation/eval_dataset.jsonl</code> as the test set.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Expected output</div>
+        <pre>============================================================
+  Model Swap & Re-Evaluation Workflow
+============================================================
+
+  [1/4] Evaluating current model: gpt-4o
+    Groundedness: 4.20  Relevance: 4.10
+    Similarity: 3.80    Fluency: 4.50
+
+  [2/4] Evaluating candidate model: gpt-4o-mini
+    Groundedness: 3.90  Relevance: 3.80
+    Similarity: 3.50    Fluency: 4.30
+
+  [3/4] Side-by-Side Comparison
+    Metric         Current   Candidate   Delta
+    groundedness   4.20      3.90        -0.30
+    relevance      4.10      3.80        -0.30
+    similarity     3.80      3.50        -0.30
+    fluency        4.50      4.30        -0.20
+
+  [4/4] Promotion Gate
+    ✓ All metrics within regression tolerance (max 0.5)
+    ✓ SWAP RECOMMENDED
+============================================================</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">CLI options for advanced use</div>
+        <pre># Specify different models
+python model_swap_eval.py --current gpt-4o --candidate gpt-4o-mini
+
+# Skip re-evaluating current model (use cached results)
+python model_swap_eval.py --candidate gpt-4o-mini --skip-current
+
+# CI mode: exit code 1 if swap not recommended
+python model_swap_eval.py --ci
+
+# Stricter regression tolerance
+python model_swap_eval.py --max-regression 0.3</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-content">
+        <div class="step-title">Review the HTML comparison report</div>
+        <div class="step-desc">Open the generated report:</div>
+        <pre># Results saved to:
+#   05-model-swap/comparison_results/comparison_*.json
+#   05-model-swap/comparison_results/comparison_report_*.html</pre>
+        <p style="font-size:12px;color:var(--muted);">The report shows a side-by-side table with color-coded deltas (green = improvement, red = regression).</p>
+      </div>
+    </div>
+
+    <div class="note note-success">
+      <strong>Checkpoint:</strong> You should see a comparison table with all 4 metrics for both models and a PASS/FAIL verdict.
+    </div>
+
+    <div class="note note-warn">
+      <strong>Key Takeaway:</strong> The model swap workflow ensures you never deploy a weaker model to production — the evaluation gate catches regressions automatically.
+    </div>
+  </section>
+
+  <!-- Module 7: CI/CD with Promotion Gates -->
+  <section id="m7" class="card module">
+    <div class="module-header">
+      <span class="module-number">7</span>
+      <span class="module-title">CI/CD with Promotion Gates</span>
+      <span class="module-time">25 min</span>
+    </div>
+
+    <div class="note note-info">
+      An Azure DevOps YAML pipeline that automatically runs evaluation + content safety + model swap checks before allowing deployment. Failed gates block the merge.
+    </div>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Pipeline architecture</div>
+        <div class="step-desc">The pipeline has 4 stages that run sequentially — each stage is a gate:</div>
+        <table>
+          <tr><th>Stage</th><th>Gate</th><th>Blocks Deploy If</th></tr>
+          <tr><td>1. EvaluationGate</td><td>4-metric quality check</td><td>Any metric below threshold (default ≥4.0)</td></tr>
+          <tr><td>2. ContentSafetyGate</td><td>Content safety tests</td><td>Safety pass rate below 90%</td></tr>
+          <tr><td>3. ModelSwapGate</td><td>Side-by-side comparison</td><td>Candidate regresses more than 0.5 (conditional*)</td></tr>
+          <tr><td>4. Deploy</td><td>Deploy to Azure</td><td>Only runs on <code>main</code> after all gates pass</td></tr>
+        </table>
+        <p style="font-size:11px;color:var(--muted);margin-top:5px;">*ModelSwapGate is conditional — only runs when commit message contains <code>[model-swap]</code> or <code>RUN_MODEL_SWAP=true</code>.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Review the pipeline YAML</div>
+        <div class="step-desc">Open the pipeline definition:</div>
+        <pre>code 06-cicd/azure-pipelines.yml</pre>
+        <p style="font-size:12px;color:var(--muted);">Key sections: <code>trigger</code> (paths that activate it), <code>variables</code> (thresholds), and 4 <code>stages</code>.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Test the promotion gate locally</div>
+        <div class="step-desc">The gate logic is a standalone script you can run locally before pushing:</div>
+        <pre># Check evaluation results against thresholds
+python 06-cicd/promotion_gate.py --check-eval `
+  --results 02-evaluation/eval_results/eval_results_20260211_141933.json `
+  --threshold 4.0
+
+# Check content safety pass rate
+python 06-cicd/promotion_gate.py --check-content-safety `
+  --results-dir 03-content-safety/test_results `
+  --min-pass-rate 90
+
+# Check model comparison (no regression above 0.5)
+python 06-cicd/promotion_gate.py --check-comparison `
+  --results 05-model-swap/comparison_results/latest.json `
+  --max-regression 0.5</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Expected gate output</div>
+        <pre>============================================================
+  Promotion Gate: Evaluation Quality
+============================================================
+  Checking: eval_results_20260211_141933.json
+  Threshold: 4.0
+
+  groundedness:  4.20  ✓ PASS
+  relevance:     4.10  ✓ PASS
+  similarity:    3.80  ✗ FAIL (below 4.0)
+  fluency:       4.50  ✓ PASS
+
+  Result: GATE FAILED (1 metric below threshold)
+  Exit code: 1
+============================================================</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Set up in Azure DevOps (walkthrough)</div>
+        <div class="step-desc">To connect this pipeline to Azure DevOps:</div>
+        <ol>
+          <li><strong>Service Connection:</strong> Create <code>llmops-service-connection</code> (type: Azure Resource Manager) pointing to your subscription</li>
+          <li><strong>RBAC for pipeline:</strong> Grant the service principal: <code>Cognitive Services OpenAI User</code> on <code>foundry-llmops-canadaeast</code> and <code>Search Index Data Reader</code> on <code>search-llmops-canadaeast</code></li>
+          <li><strong>Import pipeline:</strong> Pipelines → New Pipeline → Existing YAML → select <code>06-cicd/azure-pipelines.yml</code></li>
+          <li><strong>Test it:</strong> Create a PR to see all gates run automatically</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-content">
+        <div class="step-title">Understanding the gate pattern</div>
+        <div class="step-desc">Why gates matter for LLMOps:</div>
+        <table>
+          <tr><th>Without Gates</th><th>With Gates</th></tr>
+          <tr><td>Prompt change → deploy → discover regression in prod</td><td>Prompt change → eval gate catches regression → merge blocked</td></tr>
+          <tr><td>Model swap → hope it's okay → users notice quality drop</td><td>Model swap → side-by-side comparison → auto-reject if worse</td></tr>
+          <tr><td>Manual review of safety → inconsistent</td><td>Content safety tests run every PR → always enforced</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="note note-success">
+      <strong>Checkpoint:</strong> Running <code>python 06-cicd/promotion_gate.py --check-eval --results &lt;your-results.json&gt;</code> should print a PASS/FAIL verdict.
+    </div>
+
+    <div class="note note-rbac">
+      <strong>Pipeline RBAC:</strong> The Azure DevOps service principal needs <code>Cognitive Services OpenAI User</code> on the Foundry resource to run evaluations in CI.
+    </div>
+  </section>
+
+  <!-- Module 8: MLflow for GenAI Ops -->
+  <section id="m8" class="card module">
+    <div class="module-header">
+      <span class="module-number">8</span>
+      <span class="module-title">MLflow for GenAI Ops</span>
+      <span class="module-time">25 min</span>
+    </div>
+
+    <div class="note note-info">
+      MLflow 2.18+ adds GenAI-specific features: LLM tracing, prompt versioning, and <code>mlflow.evaluate()</code>. This module shows how MLflow complements Foundry in the development loop.
+    </div>
+
+    <h3>How MLflow + Foundry Work Together</h3>
+    <table>
+      <tr><th>Capability</th><th>Foundry</th><th>MLflow</th></tr>
+      <tr><td>Production inference</td><td style="color:var(--ok);">✓ Primary</td><td>—</td></tr>
+      <tr><td>Content safety</td><td style="color:var(--ok);">✓ Primary</td><td>—</td></tr>
+      <tr><td>Managed deployments</td><td style="color:var(--ok);">✓ Primary</td><td>—</td></tr>
+      <tr><td>Experiment tracking</td><td>—</td><td style="color:var(--ok);">✓ Primary</td></tr>
+      <tr><td>Prompt versioning</td><td>—</td><td style="color:var(--ok);">✓ Primary</td></tr>
+      <tr><td>LLM call tracing</td><td>—</td><td style="color:var(--ok);">✓ Primary</td></tr>
+      <tr><td>Offline evaluation</td><td>Azure AI Eval SDK</td><td>mlflow.evaluate()</td></tr>
+    </table>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Install MLflow</div>
+        <pre>pip install mlflow>=2.18.0 pandas>=2.0.0</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Demo A: MLflow Tracing + Prompt Versioning</div>
+        <div class="step-desc">Captures full traces of every LLM call and versions prompt templates:</div>
+        <pre>cd 07-mlflow
+python mlflow_tracing_demo.py</pre>
+        <div class="step-desc">This runs 3 demos:</div>
+        <ol>
+          <li><strong>Tracing:</strong> Uses <code>mlflow.openai.autolog()</code> to automatically capture every OpenAI call — inputs, outputs, tokens, latency</li>
+          <li><strong>Prompt Versioning:</strong> Logs 3 prompt template versions (v1_basic → v2_rag → v3_structured) as MLflow artifacts with quality metrics</li>
+          <li><strong>App Config Versioning:</strong> Logs full RAG pipeline configs (model + prompt + search settings) as versioned experiments</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">View traces in MLflow UI</div>
+        <pre># Start MLflow UI (in a separate terminal)
+mlflow ui --port 5001
+
+# Open browser to:
+# http://localhost:5001</pre>
+        <div class="step-desc">Navigate to the <code>llmops-tracing-demo</code> experiment. Click any run to see full call traces with input/output tokens and latency.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Compare prompt versions in MLflow</div>
+        <div class="step-desc">In MLflow UI:</div>
+        <ol>
+          <li>Go to <code>llmops-prompt-versions</code> experiment</li>
+          <li>Select all 3 runs (v1_basic, v2_rag, v3_structured)</li>
+          <li>Click <strong>Compare</strong> to see prompt lengths, token usage, and response quality side-by-side</li>
+          <li>Click <strong>Artifacts → prompts</strong> to view the actual prompt template text</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Demo B: MLflow Evaluate</div>
+        <div class="step-desc">Run MLflow's built-in evaluation suite with custom evaluators:</div>
+        <pre>python mlflow_eval_demo.py</pre>
+        <div class="step-desc">This shows:</div>
+        <ol>
+          <li><strong>mlflow.evaluate():</strong> Built-in QA evaluation with LLM-as-judge metrics</li>
+          <li><strong>Custom Evaluators:</strong> Response length checker, citation detector, hallucination keyword scanner</li>
+          <li><strong>Comparison Table:</strong> Side-by-side view of Azure AI Eval SDK vs MLflow evaluate()</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-content">
+        <div class="step-title">When to use which evaluation tool</div>
+        <table>
+          <tr><th>Scenario</th><th>Use</th><th>Why</th></tr>
+          <tr><td>CI/CD pipeline gates</td><td>Azure AI Eval SDK</td><td>Production-grade, integrates with Foundry portal</td></tr>
+          <tr><td>Local prompt iteration</td><td>MLflow evaluate()</td><td>Fast, offline, great for experimentation</td></tr>
+          <tr><td>Custom quality checks</td><td>MLflow custom evaluators</td><td>Easy to write Python functions as evaluators</td></tr>
+          <tr><td>Call-level debugging</td><td>MLflow tracing</td><td>Full trace of every LLM call with latency</td></tr>
+          <tr><td>Prompt A/B testing</td><td>MLflow experiments</td><td>Compare runs, metrics, artifacts side-by-side</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="note note-success">
+      <strong>Checkpoint:</strong> MLflow UI at <code>http://localhost:5001</code> should show 3 experiments: <code>llmops-tracing-demo</code>, <code>llmops-prompt-versions</code>, <code>llmops-app-versions</code>.
+    </div>
+
+    <div class="note note-warn">
+      <strong>Production Note:</strong> For production tracking, connect MLflow to Azure ML workspace as the remote tracking server instead of local <code>mlruns/</code> directory.
+    </div>
+  </section>
+
   <!-- Cleanup -->
   <section class="card">
     <h2>🧹 Cleanup (After Workshop)</h2>
@@ -833,6 +1194,9 @@ What's the price of an iPhone?</pre>
       <span class="pill">✅ RBAC Auth</span>
       <span class="pill">✅ Evaluation</span>
       <span class="pill">✅ Content Safety</span>
+      <span class="pill">✅ Model Swap</span>
+      <span class="pill">✅ CI/CD Gates</span>
+      <span class="pill">✅ MLflow GenAI</span>
     </div>
 
     <h3 style="font-size:14px;margin-bottom:8px;">📊 Your Results Summary</h3>
@@ -882,11 +1246,47 @@ What's the price of an iPhone?</pre>
     </table>
     <p style="font-size:11px;color:var(--muted);max-width:600px;margin:0 auto 15px;"><strong>Key:</strong> Default filters block hate/sexual/violence/self-harm. Jailbreaks are handled by system prompt.</p>
 
+    <h3 style="font-size:14px;margin-bottom:8px;">� LLMOps Summary</h3>
+    <table style="font-size:11px;margin:0 auto 15px;border-collapse:collapse;max-width:600px;">
+      <tr style="background:var(--surface);">
+        <th style="padding:6px 12px;border:1px solid var(--border);">Module</th>
+        <th style="padding:6px 12px;border:1px solid var(--border);">Script</th>
+        <th style="padding:6px 12px;border:1px solid var(--border);">Purpose</th>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Enhanced Eval</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);"><code>02-evaluation/run_evaluation_enhanced.py</code></td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">4-metric eval with pass/fail gates</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Model Swap</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);"><code>05-model-swap/model_swap_eval.py</code></td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Side-by-side model comparison</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">CI/CD Pipeline</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);"><code>06-cicd/azure-pipelines.yml</code></td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">4-stage pipeline with promotion gates</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">MLflow Tracing</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);"><code>07-mlflow/mlflow_tracing_demo.py</code></td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Auto-tracing + prompt versioning</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">MLflow Eval</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);"><code>07-mlflow/mlflow_eval_demo.py</code></td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">mlflow.evaluate() + custom evaluators</td>
+      </tr>
+    </table>
+
     <h3 style="font-size:14px;margin-bottom:8px;">📚 Next Steps to Explore</h3>
     <ul style="text-align:left;font-size:12px;max-width:600px;margin:0 auto;">
       <li><strong>Add Your Data:</strong> Drop .txt, .md, or .pdf files into the <code>data/</code> folder and re-run indexer</li>
       <li><strong>Deploy to Production (Optional):</strong> Run <code>.\04-frontend\deploy-to-azure.ps1</code> to host on Azure App Service</li>
-      <li><strong>CI/CD with GitHub Actions:</strong> Automate deployments, run evaluations on PRs, and enforce content safety checks in your pipeline</li>
+      <li><strong>Connect Azure DevOps:</strong> Import the repo and create a pipeline from <code>06-cicd/azure-pipelines.yml</code></li>
+      <li><strong>Remote MLflow Tracking:</strong> Connect MLflow to Azure ML workspace for team-wide experiment tracking</li>
+      <li><strong>Prompt Shields:</strong> Enable Prompt Shields in Azure OpenAI for production-grade jailbreak protection</li>
     </ul>
 
     <h3 style="font-size:14px;margin:16px 0 8px;">📖 Learn More</h3>
@@ -897,7 +1297,7 @@ What's the price of an iPhone?</pre>
     </ul>
   </section>
 
-  <footer>LLMOps Workshop Playbook v2.0 | February 2026 | Azure AI Foundry</footer>
+  <footer>LLMOps Workshop Playbook v3.0 | February 2026 | Azure AI Foundry + MLflow</footer>
 </div>
 </body>
 </html>

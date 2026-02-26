@@ -3,7 +3,9 @@
 [![Microsoft Foundry](https://img.shields.io/badge/Microsoft-Foundry-blue)](https://ai.azure.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-End-to-end LLMOps workshop using **Microsoft Foundry** to build a RAG-enabled chatbot with vector search and RBAC authentication. **No separate Azure OpenAI resource required** - all inference goes through Foundry's unified API.
+**Operational LLMOps workshop** using **Microsoft Foundry** — focused on operationalizing an existing RAG chatbot, not building one from scratch. Covers automated evaluation workflows, model swap + versioning, CI/CD promotion gates (Azure DevOps), and MLflow GenAI integration.
+
+> **Audience:** Teams that already have a RAG chatbot and need to understand how to operationalize it — the "Ops" in LLMOps.
 
 ## Architecture
 
@@ -89,30 +91,26 @@ sequenceDiagram
 
 ## What You'll Learn
 
-Build a complete RAG (Retrieval-Augmented Generation) chatbot for "Wall-E Electronics":
+Operationalize a RAG chatbot ("Wall-E Electronics") deployed on Microsoft Foundry:
 
-| Module | Topic | Key Concepts | Azure Services | Difficulty |
-|--------|-------|--------------|----------------|------------|
-| 1 | Environment Setup | SDK auth, RBAC, workspace config | Azure CLI, DefaultAzureCredential | Beginner |
-| 2 | Deploy Azure Infrastructure | IaC, resource provisioning | Microsoft Foundry, AI Search | Beginner |
-| 3 | Create Vector Index | Embeddings, vector search, chunking | Foundry Inference, AI Search | Intermediate |
-| 4 | Run RAG Chatbot | Retrieval, prompt engineering, context | Flask, GPT-4o, Vector Store | Intermediate |
-| 5 | Test & Explore | Query testing, response quality | Web UI, Foundry Portal | Beginner |
-| 6 | Run Evaluation | Groundedness, fluency metrics | Azure AI Evaluation SDK | Intermediate |
-| 7 | Content Safety | Jailbreak testing, content filters | Foundry Guardrails + Controls | Intermediate |
+| Module | Topic | Key Concepts | Azure Services | Time |
+|--------|-------|--------------|----------------|------|
+| 1 | Orientation & Architecture | Pre-built RAG chatbot walkthrough | Microsoft Foundry, AI Search | 10 min |
+| 2 | Automated Evaluation Workflows | Groundedness, relevance, similarity, fluency with pass/fail gates | Azure AI Evaluation SDK | 25 min |
+| 3 | Model Swap + Re-Evaluation | Safely replace a model, auto-compare evaluations side-by-side | Foundry Model Catalog | 25 min |
+| 4 | CI/CD with Promotion Gates | Azure DevOps pipeline with eval + safety gates blocking merges | Azure DevOps | 25 min |
+| 5 | MLflow for GenAI Ops | Tracing, prompt versioning, mlflow.evaluate() | MLflow 2.18+ | 25 min |
+| 6 | Q&A / Apply to Your System | Map patterns to your existing chatbot | — | 10 min |
 
 **Total Duration:** ~120 minutes
 
 ### Skills You'll Gain
 
-- Deploy Microsoft Foundry with models from Model Catalog
-- Use Foundry's unified inference API (no separate Azure OpenAI)
-- Create vector embeddings from documents (txt, md, pdf)
-- Build a semantic search index with Azure AI Search
-- Implement RAG pattern with GPT-4o via Foundry
-- Build a production-ready chat interface
-- Evaluate RAG quality with groundedness & fluency metrics
-- Use Foundry Guardrails for content safety
+- Run automated quality evaluations (4 metrics) with promotion gates
+- Safely swap models and compare quality before promoting
+- Build CI/CD pipelines (Azure DevOps) with evaluation and content safety gates
+- Use MLflow tracing, prompt versioning, and evaluate() alongside Foundry
+- Content safety testing with jailbreak detection
 
 ## Authentication
 
@@ -218,20 +216,32 @@ llmops-workshop/
 │   ├── shipping-policy.md          # Policy document
 │   ├── troubleshooting-guide.md    # Support document
 │   └── faq.pdf                     # PDF document
-├── 01-rag-chatbot/                 # RAG Chatbot Module
+├── 01-rag-chatbot/                 # RAG Chatbot (pre-built, orientation only)
 │   └── create_search_index.py      # Reads data/ folder, vectorizes, indexes
-├── 02-evaluation/                  # Evaluation Module
+├── 02-evaluation/                  # ★ Automated Evaluation Workflows
 │   ├── eval_dataset.jsonl          # Test dataset (Q&A pairs)
-│   ├── run_evaluation.py           # Run quality evaluation
+│   ├── run_evaluation.py           # Basic evaluation (groundedness + fluency)
+│   ├── run_evaluation_enhanced.py  # Enhanced: 4 metrics + promotion gates
 │   └── eval_results/               # Generated reports (HTML + JSON)
 ├── 03-content-safety/              # Content Safety Module
 │   ├── content_filter_config.json  # Filter configuration
 │   ├── test_content_safety.py      # Test content filters
 │   └── test_results/               # Generated reports (HTML + JSON)
 ├── 04-frontend/                    # Web Chat Interface
-│   ├── app.py                      # Flask backend (RBAC)
+│   ├── app.py                      # Flask backend (RBAC + Tracing)
 │   ├── index.html                  # Dark-themed chat UI
 │   └── requirements.txt            # Frontend dependencies
+├── 05-model-swap/                  # ★ Model Swap + Re-Evaluation
+│   ├── model_swap_eval.py          # Compare models side-by-side
+│   └── comparison_results/         # Generated comparison reports
+├── 06-cicd/                        # ★ CI/CD with Promotion Gates
+│   ├── azure-pipelines.yml         # Azure DevOps pipeline (4 stages)
+│   ├── promotion_gate.py           # Gate checker (eval, safety, comparison)
+│   └── README.txt                  # Setup instructions
+├── 07-mlflow/                      # ★ MLflow GenAI Integration
+│   ├── mlflow_tracing_demo.py      # Tracing + prompt versioning
+│   ├── mlflow_eval_demo.py         # mlflow.evaluate() vs Azure AI Eval
+│   └── mlflow_eval_results/        # Generated results
 ├── infra/                          # Infrastructure as Code
 │   ├── main.bicep                  # Main Bicep template
 │   └── modules/core.bicep          # Core resources
@@ -279,13 +289,15 @@ The `create_search_index.py` script automatically:
 
 ## 📊 Evaluation Metrics
 
-The evaluation script (`02-evaluation/run_evaluation.py`) tests RAG quality using Azure AI Evaluation SDK:
+The enhanced evaluation script (`02-evaluation/run_evaluation_enhanced.py`) tests RAG quality using 4 metrics with pass/fail promotion gates:
 
 ### Metrics (1-5 Scale)
 
-| Metric | Description | Target |
-|--------|-------------|--------|
+| Metric | Description | Default Gate |
+|--------|-------------|-------------|
 | **Groundedness** | Is the response supported by the retrieved context? | ≥4.0 |
+| **Relevance** | Does the response address the user's question? | ≥4.0 |
+| **Similarity** | How close is the response to the expected answer? | ≥3.5 |
 | **Fluency** | Is the response grammatically correct and natural? | ≥4.0 |
 
 ### Scoring Standards
@@ -318,8 +330,113 @@ The evaluation script (`02-evaluation/run_evaluation.py`) tests RAG quality usin
 ### Run Evaluation
 
 ```powershell
+# Basic evaluation (2 metrics)
 python 02-evaluation/run_evaluation.py
+
+# Enhanced evaluation with promotion gates (4 metrics)
+python 02-evaluation/run_evaluation_enhanced.py
+
+# CI mode (exit code 1 if gate fails — for pipelines)
+python 02-evaluation/run_evaluation_enhanced.py --ci
+
+# Custom thresholds
+python 02-evaluation/run_evaluation_enhanced.py --threshold 3.5
+
+# Evaluate a specific model
+python 02-evaluation/run_evaluation_enhanced.py --model gpt-4o-mini --ci
 ```
+
+## Model Swap & Re-Evaluation
+
+The model swap script (`05-model-swap/model_swap_eval.py`) safely compares two models before swapping:
+
+1. Evaluates the **current** model (baseline)
+2. Evaluates the **candidate** model
+3. Compares side-by-side with regression detection
+4. Produces a recommendation: swap or don't swap
+
+```powershell
+# Default: compare gpt-4o vs gpt-4o-mini
+python 05-model-swap/model_swap_eval.py
+
+# Custom models
+python 05-model-swap/model_swap_eval.py --current gpt-4o --candidate gpt-4o-mini
+
+# CI mode (exit code 1 if swap not recommended)
+python 05-model-swap/model_swap_eval.py --ci
+```
+
+## CI/CD Pipeline (Azure DevOps)
+
+The pipeline (`06-cicd/azure-pipelines.yml`) implements promotion gates:
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌────────────────┐    ┌──────────┐
+│ EvaluationGate  │───>│ ContentSafetyGate│───>│ ModelSwapGate  │───>│  Deploy  │
+│ 4 metrics ≥ 4.0 │    │ Pass rate ≥ 90%  │    │ No regression  │    │ (main)   │
+└─────────────────┘    └──────────────────┘    └────────────────┘    └──────────┘
+       FAIL → Block PR        FAIL → Block PR      (optional)       After all pass
+```
+
+### Pipeline Stages
+
+| Stage | Trigger | Gate Logic |
+|-------|---------|------------|
+| **EvaluationGate** | Every PR | All 4 metrics must meet thresholds |
+| **ContentSafetyGate** | Every PR | ≥90% content safety test pass rate |
+| **ModelSwapGate** | `[model-swap]` in commit msg | Candidate meets thresholds + no regression |
+| **Deploy** | Main branch only | After all gates pass |
+
+### Setup in Azure DevOps
+
+1. Create a **Service Connection** named `llmops-service-connection`
+2. Grant the service principal: `Cognitive Services OpenAI User` on `foundry-llmops-canadaeast`
+3. Create a pipeline pointing to `06-cicd/azure-pipelines.yml`
+
+```powershell
+# Test gate logic locally
+python 06-cicd/promotion_gate.py --check-eval --results-dir 02-evaluation/eval_results
+python 06-cicd/promotion_gate.py --check-content-safety --results-dir 03-content-safety/test_results
+```
+
+## MLflow GenAI Integration
+
+The MLflow modules (`07-mlflow/`) show how MLflow's newer GenAI features complement Foundry:
+
+### Tracing Demo (`mlflow_tracing_demo.py`)
+
+- **Auto-tracing**: `mlflow.openai.autolog()` captures all LLM calls
+- **Custom spans**: RAG pipeline traced as `[Retrieval] → [Generation]`
+- **Prompt versioning**: System prompts logged as versioned artifacts
+- **App versioning**: Full RAG config (model + prompt + retrieval params) logged
+
+### Evaluation Demo (`mlflow_eval_demo.py`)
+
+- **mlflow.evaluate()**: Built-in QA metrics (accuracy, ROUGE, etc.)
+- **Custom evaluators**: Domain-specific checks (length, citations, hallucination phrases)
+- **Comparison**: When to use Azure AI Evaluation vs MLflow evaluate()
+
+```powershell
+# Run tracing demo
+python 07-mlflow/mlflow_tracing_demo.py
+
+# Run evaluation demo
+python 07-mlflow/mlflow_eval_demo.py
+
+# View results in MLflow UI
+mlflow ui --port 5001
+# Open http://localhost:5001
+```
+
+### When to Use Which
+
+| Scenario | Tool |
+|----------|------|
+| Development iteration (prompt tweaks, A/B testing) | **MLflow** |
+| Production quality gates (CI/CD pipeline) | **Azure AI Evaluation** |
+| Production monitoring | **Foundry Tracing** (App Insights) |
+| Experiment tracking + comparison | **MLflow** |
+| Compliance reporting | **Azure AI Evaluation** → Foundry Portal |
 
 ## Content Safety Testing
 
