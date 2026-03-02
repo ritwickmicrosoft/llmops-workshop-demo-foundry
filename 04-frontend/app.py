@@ -26,7 +26,6 @@ try:
     from azure.monitor.opentelemetry import configure_azure_monitor
     from opentelemetry.instrumentation.flask import FlaskInstrumentor
     from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
-    import os
     # Enable content capture via environment variable
     os.environ["OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"] = "true"
     TRACING_AVAILABLE = True
@@ -50,7 +49,7 @@ FOUNDRY_PROJECT_ENDPOINT = os.environ.get(
 AI_FOUNDRY_RESOURCE = "foundry-llmops-canadaeast"
 AI_FOUNDRY_PROJECT = os.environ.get("FOUNDRY_PROJECT_NAME", "proj-llmops-demo")
 RESOURCE_GROUP = os.environ.get("AZURE_RESOURCE_GROUP", "rg-llmops-demo")
-SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID", "1d53bfb3-a84c-4eb4-8c79-f29dc8424b6a")
+SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
 
 # Azure AI Search endpoint (connected via Foundry Hub)
 AZURE_SEARCH_ENDPOINT = os.environ.get(

@@ -48,6 +48,12 @@ Thumbs.db
 
 # Outputs
 02-evaluation/eval_results/
+03-content-safety/test_results/
+05-model-swap/comparison_results/
+07-mlflow/mlflow_eval_results/
+mlruns/
+mlflow_temp_prompts/
+mlflow_temp_configs/
 *.log
 
 # Secrets (never commit these)

@@ -155,7 +155,7 @@ az login
    - `text-embedding-3-large` for embeddings
 4. Note your Foundry endpoint: `https://<your-resource>.services.ai.azure.com`
 
-### 3. Deploy Azure AI Search
+### 4. Deploy Azure AI Search
 
 ```powershell
 # Set variables
@@ -178,7 +178,7 @@ az role assignment create --assignee $myId --role "Search Index Data Contributor
   --scope $(az search service show --name search-llmops-canadaeast --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv)
 ```
 
-### 3. Create Vector Index
+### 5. Create Vector Index
 
 ```powershell
 # Update .env with your resource endpoints
@@ -190,7 +190,7 @@ cd 01-rag-chatbot
 python create_search_index.py
 ```
 
-### 4. Run Chatbot
+### 6. Run Chatbot
 
 ```powershell
 cd ../04-frontend
@@ -198,7 +198,7 @@ python app.py
 # Open http://localhost:5000
 ```
 
-### 5. Open Workshop Playbook
+### 7. Open Workshop Playbook
 
 Open [`LLMOps_Workshop_Playbook.html`](https://htmlpreview.github.io/?https://github.com/ritwickmicrosoft/llmops-workshop-demo/blob/main/LLMOps_Workshop_Playbook.html) in your browser for detailed step-by-step instructions.
 

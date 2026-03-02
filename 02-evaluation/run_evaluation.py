@@ -397,8 +397,8 @@ def main():
     azure_ai_project = None
     if upload_to_portal:
         azure_ai_project = {
-            "subscription_id": AZURE_SUBSCRIPTION_ID,
-            "resource_group_name": AZURE_RESOURCE_GROUP,
+            "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID", ""),
+            "resource_group_name": os.environ.get("AZURE_RESOURCE_GROUP", ""),
             "project_name": AZURE_PROJECT_NAME,
         }
         print(f"  → Uploading results to: {AZURE_PROJECT_NAME}")
