@@ -151,37 +151,49 @@ def setup_tracing():
     """
     Configure Azure Monitor tracing for Foundry portal visibility.
     Traces will appear in Foundry Portal > Tracing tab.
+
+    Connection string resolution order:
+      1. Foundry project telemetry API (project_client.telemetry)
+      2. APPLICATIONINSIGHTS_CONNECTION_STRING env var (set on App Service)
     """
     if not TRACING_AVAILABLE:
         print("  ⚠ Tracing not available - install azure-monitor-opentelemetry")
         return False
 
-    if project_client is None:
-        print("  ⚠ Tracing disabled (no Foundry project client)")
-        return False
-    
-    try:
-        # Get Application Insights connection string from Foundry project
-        app_insights_conn_str = project_client.telemetry.get_application_insights_connection_string()
+    app_insights_conn_str = None
 
+    # 1) Try Foundry project client
+    if project_client is not None:
+        try:
+            app_insights_conn_str = project_client.telemetry.get_application_insights_connection_string()
+        except Exception as e:
+            print(f"  ⚠ Could not get App Insights from Foundry: {e}")
+
+    # 2) Fallback to environment variable
+    if not app_insights_conn_str:
+        app_insights_conn_str = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
         if app_insights_conn_str:
-            # Configure Azure Monitor with the connection string
-            configure_azure_monitor(
-                connection_string=app_insights_conn_str,
-                enable_live_metrics=True,
-            )
+            print("  ℹ Using APPLICATIONINSIGHTS_CONNECTION_STRING env var")
+    
+    if not app_insights_conn_str:
+        print("  ⚠ No Application Insights connection found (Foundry project or env var)")
+        return False
 
-            # Instrument Flask app for automatic request tracing
-            FlaskInstrumentor().instrument_app(app)
+    try:
+        # Configure Azure Monitor with the connection string
+        configure_azure_monitor(
+            connection_string=app_insights_conn_str,
+            enable_live_metrics=True,
+        )
 
-            # Instrument OpenAI for LLM call tracing
-            OpenAIInstrumentor().instrument(capture_content=True)
+        # Instrument Flask app for automatic request tracing
+        FlaskInstrumentor().instrument_app(app)
 
-            print("  ✓ Tracing enabled - View in Foundry Portal > Tracing")
-            return True
-        else:
-            print("  ⚠ No Application Insights connection found in Foundry project")
-            return False
+        # Instrument OpenAI for LLM call tracing
+        OpenAIInstrumentor().instrument(capture_content=True)
+
+        print("  ✓ Tracing enabled - View in Foundry Portal > Tracing")
+        return True
     except Exception as e:
         print(f"  ⚠ Tracing setup failed: {e}")
         return False
