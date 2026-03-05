@@ -21,6 +21,13 @@ from datetime import datetime
 from pathlib import Path
 from azure.identity import DefaultAzureCredential
 from azure.ai.projects import AIProjectClient
+
+# Load environment variables from a local .env file if present
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except Exception:
+    pass
 from openai import AzureOpenAI
 
 
@@ -31,7 +38,16 @@ FOUNDRY_PROJECT_ENDPOINT = os.environ.get(
     "https://foundry-llmops-canadaeast.services.ai.azure.com/api/projects/proj-llmops-demo"
 )
 FOUNDRY_PROJECT_NAME = os.environ.get("FOUNDRY_PROJECT_NAME", "proj-llmops-demo")
-CHAT_MODEL = os.environ.get("CHAT_MODEL", "gpt-4o")
+
+# Optional: direct Azure OpenAI endpoint (for running without Foundry)
+AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
+
+# Model deployment name
+CHAT_MODEL = (
+    os.environ.get("CHAT_MODEL")
+    or os.environ.get("AZURE_OPENAI_CHAT_DEPLOYMENT")
+    or "gpt-4o"
+)
 RESULTS_PATH = Path(__file__).parent / "test_results"
 
 # Test cases for content safety
@@ -414,29 +430,37 @@ def main():
     print("  Microsoft Foundry - Content Safety Testing")
     print("=" * 60)
     
-    # Initialize Foundry client
-    print("\n[1/4] Connecting to Microsoft Foundry...")
+    print("\n[1/4] Connecting...")
     credential = DefaultAzureCredential()
-    
-    project_client = AIProjectClient(
-        endpoint=FOUNDRY_PROJECT_ENDPOINT,
-        credential=credential
-    )
-    
-    # Get Azure OpenAI endpoint - try connection first, fallback to AI Services endpoint
-    try:
-        aoai_connection = project_client.connections.get('aoai-connection')
-        aoai_endpoint = aoai_connection.target
-    except Exception:
-        # No separate AOAI connection - use AI Services endpoint directly
-        aoai_endpoint = FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0].replace('.services.ai.azure.com', '.cognitiveservices.azure.com') + '/'
+
+    aoai_endpoint = None
+    if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_ENDPOINT.strip():
+        aoai_endpoint = AZURE_OPENAI_ENDPOINT.strip()
+        print(f"  Azure OpenAI endpoint (direct): {aoai_endpoint}")
+    else:
+        # Fall back to Foundry project endpoint
+        project_client = AIProjectClient(
+            endpoint=FOUNDRY_PROJECT_ENDPOINT,
+            credential=credential,
+        )
+
+        # Get Azure OpenAI endpoint - try connection first, fallback to AI Services endpoint
+        try:
+            aoai_connection = project_client.connections.get('aoai-connection')
+            aoai_endpoint = aoai_connection.target
+        except Exception:
+            aoai_endpoint = (
+                FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0]
+                .replace('.services.ai.azure.com', '.cognitiveservices.azure.com')
+                + '/'
+            )
+        print(f"  Foundry Project Endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
     
     openai_client = AzureOpenAI(
         azure_endpoint=aoai_endpoint,
         azure_ad_token_provider=lambda: credential.get_token('https://cognitiveservices.azure.com/.default').token,
         api_version='2024-02-01'
     )
-    print(f"  Foundry Project Endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
     print(f"  Azure OpenAI: {aoai_endpoint}")
     print(f"  Model: {CHAT_MODEL}")
     

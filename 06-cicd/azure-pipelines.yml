@@ -89,17 +89,17 @@ stages:
       displayName: 'Install dependencies'
 
     - task: AzureCLI@2
-      displayName: 'Run Enhanced Evaluation with Gate'
+      displayName: 'Run Evaluation with Gate'
       inputs:
         azureSubscription: 'llmops-service-connection'  # Configure in Azure DevOps
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          echo "=== Running Enhanced Evaluation ==="
+          echo "=== Running Evaluation (Promotion Gate) ==="
           echo "Model: $(CHAT_MODEL)"
           echo "Foundry: $(FOUNDRY_PROJECT_ENDPOINT)"
           
-          python 02-evaluation/run_evaluation_enhanced.py \
+          python 02-evaluation/run_evaluation.py \
             --model $(CHAT_MODEL) \
             --threshold-groundedness $(GATE_THRESHOLD_GROUNDEDNESS) \
             --threshold-relevance $(GATE_THRESHOLD_RELEVANCE) \

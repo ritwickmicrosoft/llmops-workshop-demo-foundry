@@ -56,6 +56,13 @@ mlflow_temp_prompts/
 mlflow_temp_configs/
 *.log
 
+# Deploy artifacts
+04-frontend/deploy-package/
+04-frontend/deploy-package.zip
+walle-chatbot-*-logs*/
+walle-chatbot-*-logs*.zip
+deploy-with-build*.zip
+
 # Secrets (never commit these)
 **/secrets/
 *.pem

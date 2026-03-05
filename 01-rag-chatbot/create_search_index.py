@@ -16,6 +16,14 @@ import os
 import re
 from pathlib import Path
 from datetime import datetime
+ 
+# Load environment variables from a local .env file if present
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except Exception:
+    pass
+
 from azure.identity import DefaultAzureCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
@@ -52,11 +60,18 @@ FOUNDRY_PROJECT_ENDPOINT = os.environ.get(
 )
 FOUNDRY_PROJECT_NAME = os.environ.get("FOUNDRY_PROJECT_NAME", "proj-llmops-demo")
 
+# Optional: direct Azure OpenAI endpoint (for running without Foundry)
+AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
+
 # Azure AI Search Configuration
 AZURE_SEARCH_ENDPOINT = os.environ.get("AZURE_SEARCH_ENDPOINT", "https://search-llmops-canadaeast.search.windows.net")
 
-# Model deployed in Foundry (from Model Catalog)
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
+# Model deployment name
+EMBEDDING_MODEL = (
+    os.environ.get("EMBEDDING_MODEL")
+    or os.environ.get("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
+    or "text-embedding-3-large"
+)
 INDEX_NAME = os.environ.get("AZURE_SEARCH_INDEX_NAME", "walle-products")
 
 # Path to data folder (relative to script location)
@@ -267,25 +282,35 @@ def main():
     print("  Using DefaultAzureCredential (RBAC)")
     
     # Initialize clients
-    print("\n[2/5] Initializing Microsoft Foundry & Search clients...")
-    
-    # Initialize Microsoft Foundry Project Client using project endpoint
-    project_client = AIProjectClient(
-        endpoint=FOUNDRY_PROJECT_ENDPOINT,
-        credential=credential
-    )
-    print(f"  Foundry project endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
-    
-    # Get Azure OpenAI endpoint - try connection first, fallback to AI Services endpoint
-    try:
-        aoai_connection = project_client.connections.get('aoai-connection')
-        aoai_endpoint = aoai_connection.target
-        print(f"  Azure OpenAI endpoint (via connection): {aoai_endpoint}")
-    except Exception:
-        # No separate AOAI connection - use AI Services endpoint directly
-        # Extract base endpoint from project endpoint (remove /api/projects/...)
-        aoai_endpoint = FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0].replace('.services.ai.azure.com', '.cognitiveservices.azure.com') + '/'
-        print(f"  Azure OpenAI endpoint (AI Services): {aoai_endpoint}")
+    print("\n[2/5] Initializing OpenAI & Search clients...")
+
+    project_client = None
+    aoai_endpoint = None
+
+    # Prefer direct Azure OpenAI endpoint when provided
+    if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_ENDPOINT.strip():
+        aoai_endpoint = AZURE_OPENAI_ENDPOINT.strip()
+        print(f"  Azure OpenAI endpoint (direct): {aoai_endpoint}")
+    else:
+        # Fall back to Foundry project endpoint (supports Hub connection or AI Services endpoint)
+        project_client = AIProjectClient(
+            endpoint=FOUNDRY_PROJECT_ENDPOINT,
+            credential=credential,
+        )
+        print(f"  Foundry project endpoint: {FOUNDRY_PROJECT_ENDPOINT}")
+
+        # Get Azure OpenAI endpoint - try connection first, fallback to AI Services endpoint
+        try:
+            aoai_connection = project_client.connections.get('aoai-connection')
+            aoai_endpoint = aoai_connection.target
+            print(f"  Azure OpenAI endpoint (via connection): {aoai_endpoint}")
+        except Exception:
+            aoai_endpoint = (
+                FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0]
+                .replace('.services.ai.azure.com', '.cognitiveservices.azure.com')
+                + '/'
+            )
+            print(f"  Azure OpenAI endpoint (AI Services): {aoai_endpoint}")
     
     openai_client = AzureOpenAI(
         azure_endpoint=aoai_endpoint,

@@ -42,6 +42,14 @@ import json
 import argparse
 from datetime import datetime
 from pathlib import Path
+
+# Load environment variables from a local .env file if present
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except Exception:
+    pass
+
 from azure.identity import DefaultAzureCredential
 from azure.ai.evaluation import (
     GroundednessEvaluator,

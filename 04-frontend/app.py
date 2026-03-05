@@ -21,6 +21,13 @@ from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from azure.ai.projects import AIProjectClient
 from openai import AzureOpenAI
 
+# Load environment variables from a local .env file if present
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except Exception:
+    pass
+
 # Tracing imports
 try:
     from azure.monitor.opentelemetry import configure_azure_monitor
@@ -51,6 +58,9 @@ AI_FOUNDRY_PROJECT = os.environ.get("FOUNDRY_PROJECT_NAME", "proj-llmops-demo")
 RESOURCE_GROUP = os.environ.get("AZURE_RESOURCE_GROUP", "rg-llmops-demo")
 SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
 
+# Optional: direct Azure OpenAI endpoint (for running without Foundry)
+AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
+
 # Azure AI Search endpoint (connected via Foundry Hub)
 AZURE_SEARCH_ENDPOINT = os.environ.get(
     "AZURE_SEARCH_ENDPOINT",
@@ -58,8 +68,17 @@ AZURE_SEARCH_ENDPOINT = os.environ.get(
 )
 
 # Model configurations (deployed via Foundry Model Catalog)
-CHAT_MODEL_DEPLOYMENT = os.environ.get("CHAT_MODEL", "gpt-4o")
-EMBEDDING_MODEL_DEPLOYMENT = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
+# Model deployment names
+CHAT_MODEL_DEPLOYMENT = (
+    os.environ.get("CHAT_MODEL")
+    or os.environ.get("AZURE_OPENAI_CHAT_DEPLOYMENT")
+    or "gpt-4o"
+)
+EMBEDDING_MODEL_DEPLOYMENT = (
+    os.environ.get("EMBEDDING_MODEL")
+    or os.environ.get("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
+    or "text-embedding-3-large"
+)
 SEARCH_INDEX_NAME = os.environ.get("AZURE_SEARCH_INDEX_NAME", "walle-products")
 
 # System prompt for the chatbot
@@ -111,8 +130,18 @@ def get_project_client():
         credential=credential
     )
 
-# Initialize project client and OpenAI client via Foundry connection
-project_client = get_project_client()
+
+# =============================================================================
+# Optional Foundry Client (used for connections + tracing)
+# =============================================================================
+
+project_client = None
+if not (AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_ENDPOINT.strip()):
+    try:
+        project_client = get_project_client()
+    except Exception as e:
+        project_client = None
+        print(f"⚠ Foundry project client unavailable, continuing without it: {e}")
 
 # =============================================================================
 # Tracing Configuration - Sends telemetry to Foundry Portal
@@ -126,26 +155,29 @@ def setup_tracing():
     if not TRACING_AVAILABLE:
         print("  ⚠ Tracing not available - install azure-monitor-opentelemetry")
         return False
+
+    if project_client is None:
+        print("  ⚠ Tracing disabled (no Foundry project client)")
+        return False
     
     try:
         # Get Application Insights connection string from Foundry project
         app_insights_conn_str = project_client.telemetry.get_application_insights_connection_string()
-        
+
         if app_insights_conn_str:
             # Configure Azure Monitor with the connection string
             configure_azure_monitor(
                 connection_string=app_insights_conn_str,
                 enable_live_metrics=True,
             )
-            
+
             # Instrument Flask app for automatic request tracing
             FlaskInstrumentor().instrument_app(app)
-            
-            # Instrument OpenAI for LLM call tracing 
-            # capture_content=True shows actual prompts and responses in traces
+
+            # Instrument OpenAI for LLM call tracing
             OpenAIInstrumentor().instrument(capture_content=True)
-            
-            print(f"  ✓ Tracing enabled - View in Foundry Portal > Tracing")
+
+            print("  ✓ Tracing enabled - View in Foundry Portal > Tracing")
             return True
         else:
             print("  ⚠ No Application Insights connection found in Foundry project")
@@ -157,13 +189,25 @@ def setup_tracing():
 # Setup tracing (optional - continues without if unavailable)
 tracing_enabled = setup_tracing()
 
-# Get Azure OpenAI endpoint - try connection first, fallback to AI Services endpoint
-try:
-    aoai_connection = project_client.connections.get('aoai-connection')
-    aoai_endpoint = aoai_connection.target
-except Exception:
-    # No separate AOAI connection - use AI Services endpoint directly
-    aoai_endpoint = FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0].replace('.services.ai.azure.com', '.cognitiveservices.azure.com') + '/'
+# Get Azure OpenAI endpoint
+aoai_endpoint = None
+if AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_ENDPOINT.strip():
+    aoai_endpoint = AZURE_OPENAI_ENDPOINT.strip()
+else:
+    if project_client is None:
+        raise RuntimeError(
+            "No Azure OpenAI endpoint configured. Set AZURE_OPENAI_ENDPOINT, or set FOUNDRY_PROJECT_ENDPOINT with access to the Foundry project."
+        )
+
+    try:
+        aoai_connection = project_client.connections.get('aoai-connection')
+        aoai_endpoint = aoai_connection.target
+    except Exception:
+        aoai_endpoint = (
+            FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0]
+            .replace('.services.ai.azure.com', '.cognitiveservices.azure.com')
+            + '/'
+        )
 
 openai_client = AzureOpenAI(
     azure_endpoint=aoai_endpoint,

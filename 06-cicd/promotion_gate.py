@@ -4,7 +4,7 @@ LLMOps Workshop - Promotion Gate Logic
 Standalone gate checker that can be called from CI/CD pipelines.
 
 Checks:
-  1. Evaluation quality gate (from enhanced eval JSON output)
+    1. Evaluation quality gate (from evaluation JSON output)
   2. Content safety pass rate gate
   3. Model comparison regression gate
 
@@ -56,7 +56,7 @@ def find_latest_json(directory: Path) -> Path | None:
 def check_eval_gate(results_path: str, threshold: float) -> bool:
     """
     Check whether evaluation metrics meet the promotion threshold.
-    Reads the JSON output from run_evaluation_enhanced.py.
+    Reads the JSON output from 02-evaluation/run_evaluation.py (or legacy enhanced output).
     """
     path = Path(results_path)
     if not path.exists():

@@ -29,6 +29,13 @@ from datetime import datetime
 from pathlib import Path
 from azure.identity import DefaultAzureCredential
 from azure.ai.projects import AIProjectClient
+
+# Load environment variables from a local .env file if present
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
+except Exception:
+    pass
 from openai import AzureOpenAI
 
 try:

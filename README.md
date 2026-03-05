@@ -32,7 +32,7 @@ flowchart TB
         
         subgraph Search["Azure AI Search"]
             INDEX["walle-products<br/>Vector Index"]
-            DOCS["9 Documents<br/>txt, md, pdf"]
+            DOCS["8 Documents<br/>txt, md"]
         end
     end
 
@@ -44,7 +44,6 @@ flowchart TB
     subgraph DataFolder["data/"]
         TXT["*.txt<br/>Product Specs"]
         MD["*.md<br/>Policies"]
-        PDF["*.pdf<br/>FAQs"]
     end
 
     UI -->|"1. User Question"| APP
@@ -59,7 +58,6 @@ flowchart TB
     
     TXT --> INDEX
     MD --> INDEX
-    PDF --> INDEX
     
     PROJECT --> INFERENCE
     EVALMOD -.->|"Quality Metrics"| EVAL
@@ -130,12 +128,22 @@ Your Azure CLI credentials are used automatically via `DefaultAzureCredential`:
 
 ## Quick Start
 
+### Using Existing Azure Resources (No Bicep)
+
+If your customer wants to run this workshop in their **existing Azure environment** (and does not want to deploy via `infra/`), follow the runbook:
+
+- [docs/run-with-existing-azure-resources.md](docs/run-with-existing-azure-resources.md)
+
+The runbook covers both:
+- **Scenario A:** run locally only
+- **Scenario B:** deploy the frontend to Azure App Service (Managed Identity + RBAC)
+
 ### 1. Clone and Setup
 
 ```powershell
 # Clone the repository
-git clone https://github.com/ritwickmicrosoft/llmops-workshop-demo.git
-cd llmops-workshop-demo
+git clone https://github.com/ritwickmicrosoft/llmops-workshop-demo-foundry.git
+cd llmops-workshop-demo-foundry
 
 # Create Python virtual environment
 python -m venv .venv
@@ -155,7 +163,7 @@ az login
    - `text-embedding-3-large` for embeddings
 4. Note your Foundry endpoint: `https://<your-resource>.services.ai.azure.com`
 
-### 4. Deploy Azure AI Search
+### 3. Deploy Azure AI Search
 
 ```powershell
 # Set variables
@@ -185,6 +193,8 @@ az role assignment create --assignee $myId --role "Search Index Data Contributor
 Copy-Item .env.example .env
 # Edit .env with your endpoints
 
+# Note: scripts automatically load .env if present
+
 # Create search index with sample documents
 cd 01-rag-chatbot
 python create_search_index.py
@@ -200,13 +210,13 @@ python app.py
 
 ### 7. Open Workshop Playbook
 
-Open [`LLMOps_Workshop_Playbook.html`](https://htmlpreview.github.io/?https://github.com/ritwickmicrosoft/llmops-workshop-demo/blob/main/LLMOps_Workshop_Playbook.html) in your browser for detailed step-by-step instructions.
+Open [`LLMOps_Workshop_Playbook.html`](https://htmlpreview.github.io/?https://github.com/ritwickmicrosoft/llmops-workshop-demo-foundry/blob/main/LLMOps_Workshop_Playbook.html) in your browser for detailed step-by-step instructions.
 
 ## 📁 Project Structure
 
 ```
 llmops-workshop/
-├── data/                           # Sample documents (txt, md, pdf)
+├── data/                           # Sample documents (txt, md)
 │   ├── laptop-pro-15.txt           # Product specs
 │   ├── smartwatch-x200.txt         # Product specs
 │   ├── nc500-headphones.txt        # Product specs
@@ -214,14 +224,12 @@ llmops-workshop/
 │   ├── return-policy.md            # Policy document
 │   ├── warranty-policy.md          # Policy document
 │   ├── shipping-policy.md          # Policy document
-│   ├── troubleshooting-guide.md    # Support document
-│   └── faq.pdf                     # PDF document
+│   └── troubleshooting-guide.md    # Support document
 ├── 01-rag-chatbot/                 # RAG Chatbot (pre-built, orientation only)
 │   └── create_search_index.py      # Reads data/ folder, vectorizes, indexes
 ├── 02-evaluation/                  # ★ Automated Evaluation Workflows
 │   ├── eval_dataset.jsonl          # Test dataset (Q&A pairs)
-│   ├── run_evaluation.py           # Basic evaluation (groundedness + fluency)
-│   ├── run_evaluation_enhanced.py  # Enhanced: 4 metrics + promotion gates
+│   ├── run_evaluation.py           # 4 metrics + promotion gates (+ optional portal upload)
 │   └── eval_results/               # Generated reports (HTML + JSON)
 ├── 03-content-safety/              # Content Safety Module
 │   ├── content_filter_config.json  # Filter configuration
@@ -230,6 +238,7 @@ llmops-workshop/
 ├── 04-frontend/                    # Web Chat Interface
 │   ├── app.py                      # Flask backend (RBAC + Tracing)
 │   ├── index.html                  # Dark-themed chat UI
+│   ├── deploy-to-azure.ps1         # Azure App Service deployment script
 │   └── requirements.txt            # Frontend dependencies
 ├── 05-model-swap/                  # ★ Model Swap + Re-Evaluation
 │   ├── model_swap_eval.py          # Compare models side-by-side
@@ -242,6 +251,8 @@ llmops-workshop/
 │   ├── mlflow_tracing_demo.py      # Tracing + prompt versioning
 │   ├── mlflow_eval_demo.py         # mlflow.evaluate() vs Azure AI Eval
 │   └── mlflow_eval_results/        # Generated results
+├── docs/                           # Customer documentation
+│   └── run-with-existing-azure-resources.md  # BYOA runbook
 ├── infra/                          # Infrastructure as Code
 │   ├── main.bicep                  # Main Bicep template
 │   └── modules/core.bicep          # Core resources
@@ -273,23 +284,22 @@ graph LR
 
 ## Sample Documents
 
-The `data/` folder contains 9 Wall-E Electronics documents in multiple formats:
+The `data/` folder contains 8 Wall-E Electronics documents:
 
 | Format | Files | Description |
 |--------|-------|-------------|
 | `.txt` | 4 files | Product specifications (Laptop, Watch, Headphones, Tablet) |
 | `.md` | 4 files | Policies & support (Returns, Warranty, Shipping, Troubleshooting) |
-| `.pdf` | 1 file | FAQ document |
 
 The `create_search_index.py` script automatically:
 1. Reads all files from `data/` folder
-2. Extracts text from .txt, .md, and .pdf files
+2. Extracts text from .txt and .md files
 3. Generates vector embeddings using Microsoft Foundry inference API
 4. Uploads to Azure AI Search with semantic and vector search
 
 ## 📊 Evaluation Metrics
 
-The enhanced evaluation script (`02-evaluation/run_evaluation_enhanced.py`) tests RAG quality using 4 metrics with pass/fail promotion gates:
+The evaluation script (`02-evaluation/run_evaluation.py`) tests RAG quality using 4 metrics with pass/fail promotion gates:
 
 ### Metrics (1-5 Scale)
 
@@ -297,7 +307,7 @@ The enhanced evaluation script (`02-evaluation/run_evaluation_enhanced.py`) test
 |--------|-------------|-------------|
 | **Groundedness** | Is the response supported by the retrieved context? | ≥4.0 |
 | **Relevance** | Does the response address the user's question? | ≥4.0 |
-| **Similarity** | How close is the response to the expected answer? | ≥3.5 |
+| **Similarity** | How close is the response to the expected answer? | ≥4.0 |
 | **Fluency** | Is the response grammatically correct and natural? | ≥4.0 |
 
 ### Scoring Standards
@@ -318,11 +328,20 @@ The enhanced evaluation script (`02-evaluation/run_evaluation_enhanced.py`) test
   Aggregate Metrics:
   ----------------------------------------
   ✗ Groundedness    2.60/5.0
+  ~ Relevance       3.20/5.0
+  ~ Similarity      3.10/5.0
   ~ Fluency         3.00/5.0
 
+  ----------------------------------------
+  ❌ PROMOTION GATE: FAILED
+  → Do NOT promote — improve metrics first
+  → Failed metrics: groundedness, relevance, similarity, fluency
+
   📊 Recommendations:
-  - Consider improving groundedness: current score 2.60
-  - Consider improving fluency: current score 3.00
+  - Consider improving groundedness: current score 2.60 (gate ≥4.0)
+  - Consider improving relevance: current score 3.20 (gate ≥4.0)
+  - Consider improving similarity: current score 3.10 (gate ≥4.0)
+  - Consider improving fluency: current score 3.00 (gate ≥4.0)
 ```
 
 > **Note:** Low groundedness scores in demo are expected because the `context` field in `eval_dataset.jsonl` only contains document titles, not full text. In production with actual RAG retrieval, scores improve significantly.
@@ -330,20 +349,21 @@ The enhanced evaluation script (`02-evaluation/run_evaluation_enhanced.py`) test
 ### Run Evaluation
 
 ```powershell
-# Basic evaluation (2 metrics)
+# Evaluation with promotion gates (4 metrics)
 python 02-evaluation/run_evaluation.py
 
-# Enhanced evaluation with promotion gates (4 metrics)
-python 02-evaluation/run_evaluation_enhanced.py
-
 # CI mode (exit code 1 if gate fails — for pipelines)
-python 02-evaluation/run_evaluation_enhanced.py --ci
+python 02-evaluation/run_evaluation.py --ci
 
 # Custom thresholds
-python 02-evaluation/run_evaluation_enhanced.py --threshold 3.5
+python 02-evaluation/run_evaluation.py --threshold 3.5
 
 # Evaluate a specific model
-python 02-evaluation/run_evaluation_enhanced.py --model gpt-4o-mini --ci
+python 02-evaluation/run_evaluation.py --model gpt-4o-mini --ci
+
+# (Optional) Upload results to Foundry portal
+# You can use --upload-to-portal or set EVAL_UPLOAD_TO_PORTAL=true
+python 02-evaluation/run_evaluation.py --upload-to-portal
 ```
 
 ## Model Swap & Re-Evaluation
@@ -521,4 +541,4 @@ MIT License
 
 ---
 
-**LLMOps Workshop — Microsoft Foundry — February 2026**
+**LLMOps Workshop — Microsoft Foundry — March 2026**

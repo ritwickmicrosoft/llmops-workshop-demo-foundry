@@ -119,6 +119,12 @@
     <div class="note note-rbac">
       <strong>RBAC Authentication:</strong> This workshop uses role-based access control (RBAC) with your Azure identity — no API keys required! Your Azure CLI login credentials are used automatically.
     </div>
+
+    <div class="note note-info">
+      <strong>Already have Azure resources?</strong> If your organization already has Azure AI Foundry / model deployments and Azure AI Search provisioned, you can skip the resource creation steps in Module 2.
+      Follow the existing-resources runbook and then continue from the <strong>"Update .env"</strong> step:
+      <a href="docs/run-with-existing-azure-resources.md">docs/run-with-existing-azure-resources.md</a>
+    </div>
   </section>
 
   <!-- Architecture Overview -->
@@ -197,11 +203,10 @@
       <tr><td>Auth</td><td>DefaultAzureCredential</td><td>RBAC (no keys)</td></tr>
     </table>
 
-    <h3>📄 Sample Documents (9 files in data/ folder)</h3>
+    <h3>📄 Sample Documents (8 files in data/ folder)</h3>
     <ul>
       <li><strong>Products (.txt):</strong> Laptop Pro 15, SmartWatch X200, NC500 Headphones, Tablet S10</li>
       <li><strong>Policies (.md):</strong> Return Policy, Warranty Policy, Shipping Policy, Troubleshooting Guide</li>
-      <li><strong>Support (.pdf):</strong> FAQ Document</li>
     </ul>
   </section>
 
@@ -231,8 +236,8 @@
       <div class="step-content">
         <div class="step-title">Clone the workshop repository</div>
         <div class="step-desc">Open VS Code terminal (Ctrl+`) and run:</div>
-        <pre>git clone https://github.com/ritwickmicrosoft/llmops-workshop-demo.git
-cd llmops-workshop-demo</pre>
+        <pre>git clone https://github.com/ritwickmicrosoft/llmops-workshop-demo-foundry.git
+cd llmops-workshop-demo-foundry</pre>
       </div>
     </div>
 
@@ -304,6 +309,13 @@ $env:AZURE_LOCATION = "canadaeast"</pre>
       We'll create all resources via Azure CLI commands. This gives you visibility into what's being deployed.
     </div>
 
+    <div class="note note-info">
+      <strong>Using existing resources (no Bicep)?</strong> If the customer already has these resources, skip this module and set the values in <code>.env</code>.
+      The scripts support both patterns:
+      (A) model deployments hosted on an AI Services (Foundry) resource, or
+      (B) a separate Azure OpenAI resource connected to Foundry via an <code>aoai-connection</code>.
+    </div>
+
     <div class="step">
       <div class="step-num">1</div>
       <div class="step-content">
@@ -344,7 +356,7 @@ $env:AZURE_LOCATION = "canadaeast"</pre>
       <div class="step-num">4</div>
       <div class="step-content">
         <div class="step-title">Deploy GPT-4o Model</div>
-        <div class="step-desc">Deploy models directly to the AI Services resource (no separate Azure OpenAI needed):</div>
+        <div class="step-desc">Option A (simplest): deploy models directly to the AI Services (Foundry) resource. Option B: use a separate Azure OpenAI resource and connect it to Foundry via <code>aoai-connection</code>.</div>
         <pre>az cognitiveservices account deployment create `
   --name "foundry-llmops-canadaeast" `
   --resource-group $env:AZURE_RESOURCE_GROUP `
@@ -418,7 +430,7 @@ az role assignment create `
       <div class="step-num">8</div>
       <div class="step-content">
         <div class="step-title">Update .env file with your endpoints</div>
-        <div class="step-desc">Copy the example and update with your resource names:</div>
+        <div class="step-desc">Copy the example and update with your resource names (scripts auto-load <code>.env</code> if present):</div>
         <pre># Copy the example file
 Copy-Item .env.example .env
 
@@ -449,7 +461,7 @@ AZURE_SEARCH_INDEX_NAME=walle-products</pre>
     </div>
 
     <div class="note note-info">
-      This step reads 9 documents from the <code>data/</code> folder (.txt, .md, .pdf files) and creates a vector search index. Each document is vectorized using text-embedding-3-large.
+      This step reads 8 documents from the <code>data/</code> folder (.txt and .md files) and creates a vector search index. Each document is vectorized using text-embedding-3-large.
     </div>
 
     <div class="step">
@@ -468,7 +480,7 @@ AZURE_SEARCH_INDEX_NAME=walle-products</pre>
         <div class="step-desc">This script:</div>
         <ol>
           <li>Authenticates using your Azure CLI credentials (DefaultAzureCredential)</li>
-          <li>Reads all .txt, .md, and .pdf files from the <code>data/</code> folder</li>
+          <li>Reads all .txt and .md files from the <code>data/</code> folder</li>
           <li>Creates a search index called <code>walle-products</code></li>
           <li>Generates embeddings for each document using text-embedding-3-large</li>
           <li>Uploads documents with vectors to Azure AI Search</li>
@@ -718,7 +730,7 @@ What's the price of an iPhone?</pre>
   <!-- Evaluation Module -->
   <section class="card">
     <h2>📊 Step 6: Run Evaluation</h2>
-    <p style="font-size:13px;margin-bottom:15px;">Test RAG quality using Azure AI Evaluation SDK with Groundedness and Fluency metrics.</p>
+    <p style="font-size:13px;margin-bottom:15px;">Test RAG quality using Azure AI Evaluation SDK with 4 metrics and a pass/fail promotion gate.</p>
 
     <div class="step">
       <span class="num">1</span>
@@ -742,6 +754,16 @@ What's the price of an iPhone?</pre>
           <tr>
             <td style="padding:8px;border:1px solid var(--border);"><strong>Groundedness</strong></td>
             <td style="padding:8px;border:1px solid var(--border);">Is response supported by retrieved context?</td>
+            <td style="padding:8px;border:1px solid var(--border);">≥4.0/5.0</td>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid var(--border);"><strong>Relevance</strong></td>
+            <td style="padding:8px;border:1px solid var(--border);">Does the response address the user's question?</td>
+            <td style="padding:8px;border:1px solid var(--border);">≥4.0/5.0</td>
+          </tr>
+          <tr>
+            <td style="padding:8px;border:1px solid var(--border);"><strong>Similarity</strong></td>
+            <td style="padding:8px;border:1px solid var(--border);">How close is the response to the expected answer?</td>
             <td style="padding:8px;border:1px solid var(--border);">≥4.0/5.0</td>
           </tr>
           <tr>
@@ -1232,6 +1254,16 @@ mlflow ui --port 5001
         <td style="padding:6px 12px;border:1px solid var(--border);">≥4.0 for production</td>
       </tr>
       <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Relevance</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);color:var(--warn);">3.2/5.0</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">≥4.0 for production</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Similarity</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);color:var(--warn);">3.1/5.0</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">≥4.0 for production</td>
+      </tr>
+      <tr>
         <td style="padding:6px 12px;border:1px solid var(--border);">Fluency</td>
         <td style="padding:6px 12px;border:1px solid var(--border);color:var(--ok);">3.0/5.0</td>
         <td style="padding:6px 12px;border:1px solid var(--border);">≥4.0 for production</td>
@@ -1273,8 +1305,8 @@ mlflow ui --port 5001
         <th style="padding:6px 12px;border:1px solid var(--border);">Purpose</th>
       </tr>
       <tr>
-        <td style="padding:6px 12px;border:1px solid var(--border);">Enhanced Eval</td>
-        <td style="padding:6px 12px;border:1px solid var(--border);"><code>02-evaluation/run_evaluation_enhanced.py</code></td>
+        <td style="padding:6px 12px;border:1px solid var(--border);">Evaluation</td>
+        <td style="padding:6px 12px;border:1px solid var(--border);"><code>02-evaluation/run_evaluation.py</code></td>
         <td style="padding:6px 12px;border:1px solid var(--border);">4-metric eval with pass/fail gates</td>
       </tr>
       <tr>
@@ -1316,7 +1348,7 @@ mlflow ui --port 5001
     </ul>
   </section>
 
-  <footer>LLMOps Workshop Playbook v3.0 | February 2026 | Azure AI Foundry + MLflow</footer>
+  <footer>LLMOps Workshop Playbook v3.0 | March 2026 | Azure AI Foundry + MLflow</footer>
 </div>
 </body>
 </html>
