@@ -60,6 +60,7 @@ flowchart TB
     MD --> INDEX
     
     PROJECT --> INFERENCE
+    APP -.->|"Telemetry"| TRACE
     EVALMOD -.->|"Quality Metrics"| EVAL
     SAFETYMOD -.->|"Test Filters"| SAFETY
 ```
